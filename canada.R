@@ -307,15 +307,13 @@ catch_spatial2 <- catch_spatial %>%
   filter(region == "AK")
 
 # summary of total biomass contribution 
-tt <- catch_spatial2 %>%
-  filter(ts == 15) %>%
+catch_spatial2 %>%
+  filter(ts == 15, run == 2097) %>%
   #filter(ts == 100) %>% # you can't do ts=1 because HCR mgmt has not kicked in yet
-  group_by(ts, run) %>%
   mutate(all_catch = sum(mt_all)) %>%
   mutate(totprop = mt_all / all_catch) %>%
   select(Code, totprop, run) %>%
-  arrange(-totprop) %>%
-  filter(Code == "ATF")
+  arrange(-totprop)
 
 # the proportion of ATF's catch is 21%, towards the end of run 2111, a binary ssp585
 # a run like this will suffer the most from the issue of having biomass / catch in BC
@@ -334,7 +332,6 @@ catch_spatial2 %>%
 
 # this plot is fundamentally identical to the biomass one, which is no surprise because mFC is not spatially explicit
 # worth figuring out the contributions to total catch and how much of that is in BC, though
-
 
 spillover_catch <- biom_spatial2 %>%
   left_join(props, by = "Code") %>%
@@ -373,5 +370,7 @@ spillover_catch %>%
 # people will wonder why we would apply an ecosystem cap across jurisditions, it will never happen and it will muddle the waters in terms of this being useful to the NPFMC
 # 2. amend the plots so that they only capture the AK portion of catch and biomass, including rescaling B0. Issue with this is
 # that the cap hlines will refer to the entire model domain, so your total catch plots will be off
+
+# it seems like there is no way of not either make this less relevant to management or it being misrepresented
 
 

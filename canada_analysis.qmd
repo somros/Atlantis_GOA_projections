@@ -1,0 +1,349 @@
+# Spatial Analysis of Alaska-BC Model Domain for Ecosystem Cap Management
+
+## Overview
+
+This analysis explores a critical issue in applying ecosystem-based fisheries management: the spatial mismatch between the management domain (Alaska) and the model domain (Alaska + British Columbia). The Atlantis ecosystem model includes boxes representing both Alaska and British Columbia waters, but the Optimum Yield (OY) ecosystem cap is only applied to Alaska fisheries management.
+
+## Problem Statement
+
+The key challenge is that all management calculations—including Harvest Control Rules (HCRs) and OY ecosystem cap calculations—are performed using model-wide biomass and catch data (Alaska + BC), but in reality, the OY cap would only apply to Alaska waters. This creates several analytical and interpretive issues:
+
+### Arguments Against Limiting Analysis to US Waters Only
+
+1. **Model Design**: The stock assessment proxy (estBo) is computed model-wide as a population property. While it could be computed for relevant boxes only, the model applies management across all boxes.
+2. **Management Reality**: HCRs are not spatial, nor is the OY cap calculation—both are based on whole-model biomass.
+3. **F Application**: Setting F=0 in BC boxes won't help because management calculations will still use total model biomass.
+
+### Arguments For Limiting Analysis to US Waters Only
+
+1. **Management Relevance**: FMSY/proxies will be compared to Alaska-specific reference points.
+2. **Jurisdictional Reality**: The OY cap applies only to Alaska waters.
+3. **Policy Relevance**: Results should reflect actual management boundaries.
+
+## Data Setup and Configuration
+
+```{r setup}
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(data.table)
+
+# Set up run parameters
+run <- c(2097:2112, 2124:2143)
+yr_end <- 100  # Adjust based on actual run length
+oy_species <- c("POL", "COD", "ATF", "SBF", "POP", "FFS", "FHS", "FFD", 
+                "DFS", "DFD", "REX", "RFS", "RFP", "RFD", "THO", "SKB", 
+                "SKL", "SKO", "SCU")  # Adjust based on actual OY species
+
+# Key configuration from main analysis
+key_config <- data.frame(
+  run = run,
+  # Add other configuration parameters as needed
+  stringsAsFactors = FALSE
+)
+```
+
+## Analysis Functions
+
+### Function: Extract Alaska Biomass Proportions
+
+```{r biomass-function}
+get_AK_biom <- function(this_run) {
+  print(this_run)
+  
+  # File paths
+  wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  biom_file <- paste0("outputGOA0", this_run, "_testBoxBiomass.txt")
+  
+  # Read biomass data
+  biom <- data.table::fread(paste(wd, biom_file, sep = "/"), 
+                            sep = " ", 
+                            header = TRUE,
+                            nThread = getDTthreads())
+  
+  # Filter time steps
+  time_filter <- seq(1, yr_end) * 365
+  biom <- biom[Time %in% time_filter & Time/365 <= yr_end]
+  
+  # Convert to long format and filter to OY species
+  biom_long <- data.table::melt(biom, 
+                                id.vars = c("Time", "Box"), 
+                                variable.name = "Code", 
+                                value.name = "mt")
+  
+  biom_filtered <- biom_long[Code %in% oy_species]
+  
+  # Add spatial designation (Box < 92 = Alaska, Box >= 92 = BC)
+  biom_filtered[, region := fifelse(Box < 92, "AK", "BC")]
+  
+  # Summarize by region and calculate proportions
+  biom_space <- biom_filtered[, .(mt = sum(mt)), by = .(Time, region, Code)]
+  biom_space[, tot_mt := sum(mt), by = .(Time, Code)]
+  biom_space[, prop := mt / tot_mt]
+  
+  # Return Alaska-specific data
+  result <- biom_space[region == "AK", .(Time, Code, prop, tot_mt)]
+  result[, run := this_run]
+  
+  return(result)
+}
+```
+
+## Biomass Analysis
+
+### Extract Spatial Biomass Data
+
+```{r biomass-analysis}
+#| warning: false
+#| message: false
+
+# Extract biomass data for all runs
+biom_spatial <- bind_rows(lapply(run, get_AK_biom))
+
+# Add run configuration information
+biom_spatial2 <- biom_spatial %>%
+  left_join(key_config, by = "run")
+
+# Calculate mean proportions by species
+props <- biom_spatial2 %>%
+  group_by(Code) %>%
+  summarise(mean_prop = mean(prop)) %>%
+  arrange(-mean_prop)
+
+# Calculate total biomass contributions
+total_biomass_props <- biom_spatial2 %>%
+  slice_min(Time) %>%
+  slice_min(run) %>%
+  mutate(all_biom = sum(tot_mt)) %>%
+  mutate(totprop = tot_mt / all_biom) %>%
+  select(Code, totprop) %>%
+  arrange(-totprop)
+```
+
+### Visualization: Biomass Proportions Over Time
+
+```{r biomass-plot}
+#| warning: false
+#| message: false
+#| fig-width: 12
+#| fig-height: 8
+
+biom_spatial2 %>%
+  mutate(Code = factor(Code, levels = sort(oy_species))) %>%
+  ggplot(aes(x = Time/365, y = prop, color = factor(run))) +
+  geom_line() +
+  geom_hline(yintercept = 1, color = "red", linetype = "dashed") +
+  theme_bw() +
+  scale_y_continuous(limits = c(0,1)) +
+  facet_wrap(~Code) +
+  labs(
+    title = "Proportion of Biomass in Alaska Waters by Species",
+    x = "Year",
+    y = "Proportion in Alaska",
+    color = "Run"
+  )
+```
+
+## Key Findings: Biomass Distribution
+
+The analysis reveals important spatial patterns in biomass distribution:
+
+### Species-Specific Alaska Proportions (Mean across all runs):
+
+- **Highest Alaska concentration** (>95%): SCU (99.6%), POL (99.5%), DFD (98.9%), COD (96.6%)
+- **Moderate Alaska concentration** (80-95%): SKO, SKB, FHS, RFP, FFS, ATF, SKL, RFS, REX, SBF, THO
+- **Lowest Alaska concentration** (<80%): POP (77.2%), FFD (74.7%), DFS (72.4%), RFD (56.5%)
+
+### Key Observations:
+
+1. **Temporal Stability**: Proportions remain constant over time across all runs
+2. **Cross-Run Consistency**: Proportions are identical across runs (short of minor variations)
+3. **Management Implications**: POL and COD, the most important commercial species, are almost entirely in Alaska waters
+
+## Catch Analysis
+
+### Function: Extract Total Catch by Region
+
+```{r catch-function}
+#| warning: false
+#| message: false
+
+build_catch_output_TOT <- function(this_run) {
+  print(paste(this_run, "CATCH"))
+  
+  # File paths
+  wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  ncfile <- paste0(wd, "/outputGOA0", this_run, "_testTOTCATCH.nc")
+  
+  # Read NetCDF file
+  this_tidync <- tidync(ncfile)
+  this_nc <- ncdf4::nc_open(ncfile)
+  
+  catch_nc_tot_ls <- list()
+  
+  # Extract catch data for each OY species
+  for(i in 1:length(oy_names)) {
+    fg <- oy_names[i]
+    code <- grps %>% filter(Name == fg) %>% pull(Code)
+    
+    # Extract catch variables
+    catch_vars <- this_tidync %>%
+      activate("D1,D0") %>%
+      hyper_vars() %>%
+      filter(grepl("Tot_.*_Catch", name)) %>%
+      filter(grepl(code, name))
+    
+    catch <- purrr::map(catch_vars$name, ncdf4::ncvar_get, nc = this_nc) 
+    catch_df <- as.data.frame(catch)
+    
+    # Add spatial information and reshape
+    catch_df <- catch_df %>% 
+      mutate(box_id = 0:108) %>%
+      pivot_longer(-box_id, names_to = "ts", values_to = "mt") %>%
+      mutate(
+        ts = as.numeric(gsub("X", "", ts)) - 1,
+        Name = fg,
+        Code = code
+      ) %>%
+      filter(ts > 0)
+    
+    catch_nc_tot_ls[[i]] <- catch_df
+  }
+  
+  catch_nc_TOT <- bind_rows(catch_nc_tot_ls) %>%
+    mutate(run = this_run)
+  
+  return(catch_nc_TOT)
+}
+```
+
+### Catch Spatial Analysis
+
+```{r catch-analysis}
+#| warning: false
+#| message: false
+
+# Extract catch data for all runs
+catch_spatial <- bind_rows(lapply(run, build_catch_output_TOT))
+
+# Calculate regional proportions
+catch_spatial2 <- catch_spatial %>%
+  mutate(region = ifelse(box_id < 92, "AK", "BC")) %>%
+  group_by(ts, Name, Code, run, region) %>%
+  summarise(mt_region = sum(mt), .groups = "drop") %>%
+  group_by(ts, Name, Code, run) %>%
+  mutate(
+    mt_all = sum(mt_region),
+    prop = mt_region / mt_all
+  ) %>%
+  ungroup() %>%
+  filter(region == "AK")
+```
+
+## Ecosystem-Wide Spillover Effects
+
+### Total Biomass Spillover Analysis
+
+```{r spillover-analysis}
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 6
+
+# Calculate ecosystem-wide Alaska proportions
+spillover <- biom_spatial2 %>%
+  left_join(props, by = "Code") %>%
+  mutate(ak_mt = tot_mt * mean_prop) %>%
+  group_by(Time, run) %>%
+  summarise(
+    all_biom = sum(tot_mt),      # Total model-wide biomass
+    all_biom_ak = sum(ak_mt),    # Total Alaska biomass
+    .groups = "drop"
+  ) %>%
+  mutate(akprop = all_biom_ak / all_biom)
+
+# Visualization
+spillover %>%
+  ggplot(aes(x = Time, y = akprop, color = factor(run))) +
+  geom_line() +
+  labs(
+    title = "Proportion of Total FMP Groundfish Biomass in Alaska Waters",
+    x = "Time",
+    y = "Alaska Proportion",
+    color = "Run"
+  ) +
+  theme_bw()
+```
+
+**Key Finding**: 84-91% of total FMP groundfish biomass is in Alaska waters, with variation due to different population dynamics of Alaska-dominant vs. BC-dominant stocks.
+
+## Management Implications
+
+### Impact on Harvest Control Rules (HCRs)
+
+**Assessment**: HCR management is **NOT significantly affected** by the spatial issue.
+
+**Reasoning**:
+- HCRs are based on B/B₀ ratios, which are proportional
+- F is applied equally across the model domain
+- Since proportions remain constant over time, B/B₀ in Alaska ≈ B/B₀ in BC ≈ B/B₀ model-wide
+- The proportional nature of HCR calculations means spatial distribution doesn't affect F determination
+
+### Impact on Optimum Yield (OY) Management
+
+**Assessment**: OY management **IS significantly affected** by the spatial issue.
+
+**Problem**: 
+- Each year, projected catch includes biomass from BC (up to 44% for some species)
+- BC biomass contributes to model-wide catch projections against the Alaska-only cap
+- If only Alaska were considered, the cap might not be reached, and OY rescaling might not activate
+- This is particularly problematic for high-biomass species like Arrowtooth Flounder (ATF), which comprises 23% of total biomass with 12% in BC waters
+
+### Species of Greatest Concern
+
+Based on biomass contribution and BC proportion:
+
+1. **Arrowtooth Flounder (ATF)**: 23% of total biomass, 12% in BC
+2. **Sablefish (SBF)**: 3% of total biomass, 19% in BC  
+3. **Pacific Ocean Perch (POP)**: 2% of total biomass, 23% in BC
+
+## Potential Solutions
+
+### Option 1: Model-Wide Management Approach
+**Approach**: Apply ecosystem cap to entire model domain
+- **Pros**: Cleaner explanation, illustrates concepts clearly
+- **Cons**: No OY management exists in BC; questionable relevance to NPFMC
+
+### Option 2: Alaska-Only Analysis
+**Approach**: Rescale all plots to Alaska waters only, including B₀
+- **Pros**: Reflects actual management boundaries
+- **Cons**: Cap reference lines would be inconsistent; management calculations still use model-wide data
+
+### Option 3: Separate Analysis Track
+**Approach**: Develop parallel Alaska-specific calculations and clearly document limitations
+- **Pros**: Transparent about spatial issues while maintaining analytical rigor
+- **Cons**: Additional complexity in analysis and interpretation
+
+## Conclusions
+
+1. **Biomass Distribution**: Most OY species have >80% of biomass in Alaska waters, with notable exceptions (RFD at 57%, DFS at 72%)
+
+2. **Temporal Consistency**: Spatial proportions remain stable over time and across management scenarios
+
+3. **HCR Impact**: Minimal—proportional calculations are unaffected by spatial distribution
+
+4. **OY Impact**: Significant—BC biomass artificially inflates catch projections against Alaska-only caps
+
+5. **Key Species**: Arrowtooth Flounder presents the largest concern due to high biomass and meaningful BC proportion
+
+## Recommendations
+
+For manuscript preparation, we recommend **Option 3**: maintain model-wide calculations while clearly documenting the spatial limitation. This approach:
+
+- Preserves analytical integrity
+- Acknowledges real-world management boundaries  
+- Provides transparent discussion of limitations
+- Allows readers to understand both the concept demonstration and practical constraints
+
+The spatial mismatch represents a common challenge in ecosystem modeling where model domains don't perfectly align with management jurisdictions, making this a valuable case study for the broader ecosystem-based fisheries management community.
