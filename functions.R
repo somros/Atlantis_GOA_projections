@@ -599,13 +599,13 @@ get_polprop <- function(this_run){
   # File paths
   wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
   dietfile <-  paste0("outputGOA0", this_run, "_testDietCheck.txt")
-  diet <- read.csv(paste(wd, dietfile, sep = "/"), sep = " ", header = T)
+  diet <- fread(paste(wd, dietfile, sep = "/"), 
+                select = c("Time", "Predator", "Cohort", "POL"))
   
   diet1 <- diet %>%
     mutate(Time = ceiling(Time/365)) %>%
     left_join(POL_predators) %>%
     filter(!is.na(isPred)) %>%
-    dplyr::select(Time, Predator, Cohort, POL) %>%
     group_by(Time, Predator) %>% # take the mean across the multiple time steps within each year AND across age classes for a predator
     summarise(POL = mean(POL)) 
   

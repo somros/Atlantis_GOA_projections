@@ -10,6 +10,7 @@ library(patchwork)
 library(PNWColors)
 library(tidync)
 library(ncdf4)
+library(data.table)
 
 rm(list = ls())
 
@@ -104,14 +105,14 @@ for(i in 1:length(oy_species)){
 
 # diets of pollock's predators
 dietfile <-  paste0("outputGOA0", ref_run, "_testDietCheck.txt")
-diet <- read.csv(paste(oy_dir, dietfile, sep = "/"), sep = " ", header = T)
+diet <- fread(paste(oy_dir, dietfile, sep = "/"), 
+              select = c("Time", "Predator", "Cohort", "POL"))
 
 # identify POL's predators: say all groups who have >5% POL in their diets at the end of the burn-in period
 # these are the species that have at least one cohort eating > 5% POL by the end of the burn-in
 POL_predators <- diet %>%
   mutate(Time = ceiling(Time/365)) %>%
   filter(Time == burnin) %>%
-  dplyr::select(Predator, Cohort, POL) %>%
   group_by(Predator, Cohort) %>%
   summarise(POL = mean(POL)) %>%
   filter(POL>0.05) %>%
@@ -247,9 +248,8 @@ for(i in 1:length(oy_species)){
 }
 
 # Diets -------------------------------------------------------------------
-# pretty slow too
 # do for all runs
-# diets_pol_pred <- bind_rows(lapply(run, get_polprop))
+diets_pol_pred <- bind_rows(lapply(run, get_polprop))
 
 # join with run info - also need POL f info
 diet_key <- catch_df %>%
