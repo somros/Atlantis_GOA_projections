@@ -208,10 +208,8 @@ catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","ramp"))
 plot_fishery(catch_df)
 
 # Shannon Index -----------------------------------------------------------
-# Keep this as a separate piece because it is VERY SLOW
-# a bit lower 1 minute per run / nc file, though that will hange depending on run length / file size
 h_frame <- data.frame() # initialize df
-#H <- bind_rows(lapply(run, get_H, do_mature=F)) # apply function to the nc files and get time series for all runs
+H <- bind_rows(lapply(run, get_H, do_mature=F)) # apply function to the nc files and get time series for all runs
 
 # join with catch df from above
 h_plot <- catch_df %>%

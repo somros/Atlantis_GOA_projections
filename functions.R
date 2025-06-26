@@ -500,72 +500,83 @@ get_H <- function(this_run, do_mature){
   wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
   ncfile <- paste0(wd, "/outputGOA0", this_run, "_test.nc")
   
-  this_ncfile <- tidync(ncfile)
+  # Open file
   this_ncdata <- nc_open(ncfile)
   
   ts <- ncdf4::ncvar_get(this_ncdata,varid = "t") %>% as.numeric
   tyrs <- ts/(60*60*24*365)
   
+  # Pre-allocate list for results (much faster than rbind)
+  h_list <- vector("list", length(oy_names))
+  
   # do one fg at a time, then bring them back together
-  naa_frame <- data.frame()
-  for (i in 1:length(oy_names)){
+  for (i in seq_along(oy_names)){
     
     fg <- oy_names[i]
     sp <- grps %>% filter(Name == fg) %>% pull(Code) # need this for the fspb frame
     
     # Get numbers by box
-    abun_vars <- hyper_vars(this_ncfile) %>% # all variables in the .nc file active grid
-      filter(grepl("_Nums",name)) %>% # filter for abundance variables
-      filter(grepl(fg,name)) # filter for specific functional group
+    all_var_names <- names(this_ncdata$var)
+    abun_var_names <- all_var_names[grepl("_Nums", all_var_names) & grepl(fg, all_var_names)]
     
-    abun1 <- purrr::map(abun_vars$name,ncdf4::ncvar_get,nc=this_ncdata) %>% 
-      lapply(setNA) %>%
-      purrr::map(apply,MARGIN=3,FUN=sum,na.rm=T) %>% 
-      bind_cols() %>% 
-      suppressMessages() %>% 
-      set_names(abun_vars$name) %>% 
-      mutate(t=tyrs)
+    # Read all abundance data at once
+    abun_data <- map(abun_var_names, ~ {
+      data <- ncdf4::ncvar_get(this_ncdata, varid = .x)
+      # Avoid setNA() - use direct indexing and na.rm instead
+      # This eliminates the expensive lapply(setNA) bottleneck
+      apply(data, MARGIN = 3, FUN = sum, na.rm = TRUE)
+    })
     
-    abun2 <- abun1 %>%
-      pivot_longer(cols = -t,names_to = 'age_group',values_to = 'abun') %>%
-      mutate(age=parse_number(age_group)) %>%
-      mutate(year = ceiling(t)) %>%
-      mutate(Name = oy_names[i]) %>%
-      dplyr::select(year, Name, age, abun) %>%
-      mutate(age = age-1) # to be consistent with Atlantis style indexing from 0
+    # Create abundance dataframe
+    abun_df <- data.frame(
+      t = tyrs,
+      do.call(cbind, abun_data)
+    )
+    names(abun_df)[-1] <- abun_var_names
     
-    # bring in maturity info if needed
-    if(do_mature){
-      
-      abun2 <- abun2 %>%
+    # Process abundance data
+    abun_processed <- abun_df %>%
+      pivot_longer(cols = -t, names_to = 'age_group', values_to = 'abun') %>%
+      mutate(
+        age = parse_number(age_group) - 1,  # Atlantis indexing from 0
+        year = ceiling(t),
+        Name = fg
+      ) %>%
+      select(year, Name, age, abun)
+    
+    # Apply maturity adjustment if needed
+    if(do_mature && exists("fspb_df")) {
+      abun_processed <- abun_processed %>%
         left_join(fspb_df %>% filter(Code == sp), by = "age") %>%
-        mutate(abun = abun * fspb) 
+        mutate(abun = abun * fspb)
     }
     
-    # get shannon index
-    h <- abun2 %>%
+    # Calculate Shannon index
+    h_result <- abun_processed %>%
       group_by(year, Name) %>%
-      mutate(tot_abun = sum(abun)) %>%
-      ungroup() %>%
-      mutate(p = abun / tot_abun,
-             step1 = p * log(p)) %>%
-      filter(!is.nan(step1)) %>%
-      group_by(year, Name) %>%
-      summarise(H = -sum(step1)) %>%
-      ungroup()
+      summarise(
+        H = {
+          p <- abun / sum(abun)
+          p <- p[p > 0]  # Remove zeros to avoid log(0)
+          -sum(p * log(p))
+        },
+        .groups = 'drop'
+      )
     
-    # bind
-    h_frame <- rbind(h_frame, h)
-    
+    h_list[[i]] <- h_result
   }
   
-  # add run id
-  h_frame <- h_frame %>%
+  # Close the netCDF file
+  nc_close(this_ncdata)
+  
+  # Combine results
+  h_frame <- bind_rows(h_list) %>%
     mutate(run = this_run)
   
   return(h_frame)
   
 }
+
 
 #' Calculate Pollock Consumption Proportions by Predators
 #'
