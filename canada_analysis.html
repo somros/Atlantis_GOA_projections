@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.5.43">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>canada_analysis</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="canada_analysis_files/libs/clipboard/clipboard.min.js"></script>
+<script src="canada_analysis_files/libs/quarto-html/quarto.js"></script>
+<script src="canada_analysis_files/libs/quarto-html/popper.min.js"></script>
+<script src="canada_analysis_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="canada_analysis_files/libs/quarto-html/anchor.min.js"></script>
+<link href="canada_analysis_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="canada_analysis_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="canada_analysis_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="canada_analysis_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="canada_analysis_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="spatial-analysis-of-alaska-bc-model-domain-for-ecosystem-cap-management" class="level1">
+<h1>Spatial Analysis of Alaska-BC Model Domain for Ecosystem Cap Management</h1>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>This analysis explores the issue with the spatial mismatch between the management domain (Alaska) and the model domain (Alaska + British Columbia). The Atlantis model includes boxes representing both Alaska and British Columbia waters, but the Optimum Yield (OY) ecosystem cap is only applied to Alaska fisheries management.</p>
+</section>
+<section id="problem-statement" class="level2">
+<h2 class="anchored" data-anchor-id="problem-statement">Problem Statement</h2>
+<p>The key challenge is that all management calculations—including Harvest Control Rules (HCRs) and OY ecosystem cap calculations—are performed using model-wide biomass and catch data (Alaska + BC), but in reality, the OY cap would only apply to Alaska waters. Implementing spatial HCR and OY management into Atlantis is not viable. Equally, eliminating the BC part of the model is not a real option, as it would basically require developing a new model. However, this mismatch creates several analytical and interpretive issues.</p>
+<section id="arguments-against-limiting-analysis-to-us-waters-only" class="level3">
+<h3 class="anchored" data-anchor-id="arguments-against-limiting-analysis-to-us-waters-only">Arguments Against Limiting Analysis to US Waters Only</h3>
+<ol type="1">
+<li><strong>Model Design</strong>: The unfished biomass proxy (estBo) is computed model-wide as a population property. While it could be computed for relevant boxes only, the model applies management across all boxes.</li>
+<li><strong>Management Reality</strong>: HCRs are not spatial, nor is the OY cap calculation—both are based on whole-model biomass.</li>
+<li><strong>F Application</strong>: Setting F=0 in BC boxes won’t help because management calculations will still use total model biomass.</li>
+</ol>
+</section>
+<section id="arguments-for-limiting-analysis-to-us-waters-only" class="level3">
+<h3 class="anchored" data-anchor-id="arguments-for-limiting-analysis-to-us-waters-only">Arguments For Limiting Analysis to US Waters Only</h3>
+<ol type="1">
+<li><strong>Management Relevance</strong>: FMSY/proxies will be compared to Alaska-specific reference points, whether or not we call for a specific comparison.</li>
+<li><strong>Jurisdictional Reality</strong>: The OY cap applies only to Alaska waters.</li>
+<li><strong>Policy Relevance</strong>: Results should reflect actual management boundaries.</li>
+</ol>
+</section>
+</section>
+<section id="data-setup-and-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="data-setup-and-configuration">Data Setup and Configuration</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(data.table)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidync)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ncdf4)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Set up run parameters</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>run <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2097</span><span class="sc">:</span><span class="dv">2112</span>, <span class="dv">2124</span><span class="sc">:</span><span class="dv">2143</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>yr_end <span class="ot">&lt;-</span> <span class="dv">100</span>  <span class="co"># Adjust based on actual run length</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>oy_species <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"POL"</span>, <span class="st">"COD"</span>, <span class="st">"ATF"</span>, <span class="st">"SBF"</span>, <span class="st">"POP"</span>, <span class="st">"FFS"</span>, <span class="st">"FHS"</span>, <span class="st">"FFD"</span>, </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                <span class="st">"DFS"</span>, <span class="st">"DFD"</span>, <span class="st">"REX"</span>, <span class="st">"RFS"</span>, <span class="st">"RFP"</span>, <span class="st">"RFD"</span>, <span class="st">"THO"</span>, <span class="st">"SKB"</span>, </span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                <span class="st">"SKL"</span>, <span class="st">"SKO"</span>, <span class="st">"SCU"</span>)  <span class="co"># Adjust based on actual OY species</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co"># read in species info</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>grps <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/GOA_Groups.csv"</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>codes <span class="ot">&lt;-</span> grps <span class="sc">%&gt;%</span> <span class="fu">pull</span>(Code)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>oy_names <span class="ot">&lt;-</span> grps <span class="sc">%&gt;%</span> <span class="fu">filter</span>(Code <span class="sc">%in%</span> oy_species) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(Name) <span class="co"># need this for the NC files</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="analysis-functions" class="level2">
+<h2 class="anchored" data-anchor-id="analysis-functions">Analysis Functions</h2>
+<section id="function-extract-alaska-biomass-proportions" class="level3">
+<h3 class="anchored" data-anchor-id="function-extract-alaska-biomass-proportions">Function: Extract Alaska Biomass Proportions</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>get_AK_biom <span class="ot">&lt;-</span> <span class="cf">function</span>(this_run) {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(this_run)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># File paths</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  wd <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_"</span>, this_run)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  biom_file <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"outputGOA0"</span>, this_run, <span class="st">"_testBoxBiomass.txt"</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Read biomass data</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  biom <span class="ot">&lt;-</span> data.table<span class="sc">::</span><span class="fu">fread</span>(<span class="fu">paste</span>(wd, biom_file, <span class="at">sep =</span> <span class="st">"/"</span>), </span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                            <span class="at">sep =</span> <span class="st">" "</span>, </span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                            <span class="at">header =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                            <span class="at">nThread =</span> <span class="fu">getDTthreads</span>())</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Filter time steps</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  time_filter <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, yr_end) <span class="sc">*</span> <span class="dv">365</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  biom <span class="ot">&lt;-</span> biom[Time <span class="sc">%in%</span> time_filter <span class="sc">&amp;</span> Time<span class="sc">/</span><span class="dv">365</span> <span class="sc">&lt;=</span> yr_end]</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Convert to long format and filter to OY species</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  biom_long <span class="ot">&lt;-</span> data.table<span class="sc">::</span><span class="fu">melt</span>(biom, </span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>                                <span class="at">id.vars =</span> <span class="fu">c</span>(<span class="st">"Time"</span>, <span class="st">"Box"</span>), </span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>                                <span class="at">variable.name =</span> <span class="st">"Code"</span>, </span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>                                <span class="at">value.name =</span> <span class="st">"mt"</span>)</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  biom_filtered <span class="ot">&lt;-</span> biom_long[Code <span class="sc">%in%</span> oy_species]</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Add spatial designation (Box &lt; 92 = Alaska, Box &gt;= 92 = BC)</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>  biom_filtered[, region <span class="sc">:</span><span class="er">=</span> <span class="fu">fifelse</span>(Box <span class="sc">&lt;</span> <span class="dv">92</span>, <span class="st">"AK"</span>, <span class="st">"BC"</span>)]</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Summarize by region and calculate proportions</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>  biom_space <span class="ot">&lt;-</span> biom_filtered[, .(<span class="at">mt =</span> <span class="fu">sum</span>(mt)), by <span class="ot">=</span> .(Time, region, Code)]</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>  biom_space[, tot_mt <span class="sc">:</span><span class="er">=</span> <span class="fu">sum</span>(mt), by <span class="ot">=</span> .(Time, Code)]</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>  biom_space[, prop <span class="sc">:</span><span class="er">=</span> mt <span class="sc">/</span> tot_mt]</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Return Alaska-specific data</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>  result <span class="ot">&lt;-</span> biom_space[region <span class="sc">==</span> <span class="st">"AK"</span>, .(Time, Code, prop, tot_mt)]</span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>  result[, run <span class="sc">:</span><span class="er">=</span> this_run]</span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(result)</span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+</section>
+<section id="biomass-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="biomass-analysis">Biomass Analysis</h2>
+<section id="extract-spatial-biomass-data" class="level3">
+<h3 class="anchored" data-anchor-id="extract-spatial-biomass-data">Extract Spatial Biomass Data</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract biomass data for all runs</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>biom_spatial <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(run, get_AK_biom))</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate mean proportions by species</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>props <span class="ot">&lt;-</span> biom_spatial <span class="sc">%&gt;%</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(Code) <span class="sc">%&gt;%</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_prop =</span> <span class="fu">mean</span>(prop)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="sc">-</span>mean_prop)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate total biomass contributions</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>total_biomass_props <span class="ot">&lt;-</span> biom_spatial <span class="sc">%&gt;%</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_min</span>(Time) <span class="sc">%&gt;%</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_min</span>(run) <span class="sc">%&gt;%</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">all_biom =</span> <span class="fu">sum</span>(tot_mt)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">totprop =</span> tot_mt <span class="sc">/</span> all_biom) <span class="sc">%&gt;%</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Code, totprop) <span class="sc">%&gt;%</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="sc">-</span>totprop)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="visualization-biomass-proportions-over-time" class="level3">
+<h3 class="anchored" data-anchor-id="visualization-biomass-proportions-over-time">Visualization: Biomass Proportions Over Time</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>biom_spatial <span class="sc">%&gt;%</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Code =</span> <span class="fu">factor</span>(Code, <span class="at">levels =</span> <span class="fu">sort</span>(oy_species))) <span class="sc">%&gt;%</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Time<span class="sc">/</span><span class="dv">365</span>, <span class="at">y =</span> prop, <span class="at">color =</span> <span class="fu">factor</span>(run))) <span class="sc">+</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">1</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_continuous</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>,<span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Code) <span class="sc">+</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Proportion of Biomass in Alaska Waters by Species"</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Year"</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Proportion in Alaska"</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> <span class="st">"Run"</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="canada_analysis_files/figure-html/biomass-plot-1.png" class="img-fluid figure-img" width="1152"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="key-findings-biomass-distribution" class="level2">
+<h2 class="anchored" data-anchor-id="key-findings-biomass-distribution">Key Findings: Biomass Distribution</h2>
+<section id="species-specific-alaska-proportions-mean-across-all-runs" class="level3">
+<h3 class="anchored" data-anchor-id="species-specific-alaska-proportions-mean-across-all-runs">Species-Specific Alaska Proportions (Mean across all runs):</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>props</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 19 × 2
+   Code  mean_prop
+   &lt;fct&gt;     &lt;dbl&gt;
+ 1 SCU       0.996
+ 2 POL       0.995
+ 3 DFD       0.989
+ 4 COD       0.966
+ 5 SKO       0.964
+ 6 SKB       0.961
+ 7 FHS       0.957
+ 8 RFP       0.927
+ 9 FFS       0.918
+10 ATF       0.878
+11 SKL       0.859
+12 RFS       0.827
+13 REX       0.824
+14 SBF       0.810
+15 THO       0.775
+16 POP       0.772
+17 FFD       0.747
+18 DFS       0.724
+19 RFD       0.565</code></pre>
+</div>
+</div>
+<ul>
+<li><strong>Highest Alaska concentration</strong> (&gt;95%): SCU (99.6%), POL (99.5%), DFD (98.9%), COD (96.6%)</li>
+<li><strong>Moderate Alaska concentration</strong> (80-95%): SKO, SKB, FHS, RFP, FFS, ATF, SKL, RFS, REX, SBF, THO</li>
+<li><strong>Lowest Alaska concentration</strong> (&lt;80%): POP (77.2%), FFD (74.7%), DFS (72.4%), RFD (56.5%)</li>
+</ul>
+</section>
+<section id="key-observations" class="level3">
+<h3 class="anchored" data-anchor-id="key-observations">Key Observations:</h3>
+<ol type="1">
+<li><strong>Temporal Stability</strong>: Proportions remain constant over time across all runs</li>
+<li><strong>Cross-Run Consistency</strong>: Proportions are identical across runs (short of minor variations)</li>
+<li><strong>Management Implications</strong>: POL and COD, the most important commercial species, and also the biggest biomass and catch in the model, are almost entirely in Alaska waters. Arrowtooth, sablefish, and POP have a sizable proportion of their biomass in BC waters (12%, 19%, 23% of total biomass). This is concerning for arrowtooth because it is a large biomass of the total model groundfish biomass (23%), and for the other two because they are important for management, they have relatively higher F, and we may need to increase their biomass in the model to match recent conditions in the GOA.</li>
+</ol>
+</section>
+</section>
+<section id="catch-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="catch-analysis">Catch Analysis</h2>
+<section id="function-extract-total-catch-by-region" class="level3">
+<h3 class="anchored" data-anchor-id="function-extract-total-catch-by-region">Function: Extract Total Catch by Region</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>build_catch_output_TOT <span class="ot">&lt;-</span> <span class="cf">function</span>(this_run) {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">paste</span>(this_run, <span class="st">"CATCH"</span>))</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># File paths</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  wd <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_"</span>, this_run)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  ncfile <span class="ot">&lt;-</span> <span class="fu">paste0</span>(wd, <span class="st">"/outputGOA0"</span>, this_run, <span class="st">"_testTOTCATCH.nc"</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Read NetCDF file</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  this_tidync <span class="ot">&lt;-</span> <span class="fu">tidync</span>(ncfile)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  this_nc <span class="ot">&lt;-</span> ncdf4<span class="sc">::</span><span class="fu">nc_open</span>(ncfile)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  catch_nc_tot_ls <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Extract catch data for each OY species</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(oy_names)) {</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    fg <span class="ot">&lt;-</span> oy_names[i]</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    code <span class="ot">&lt;-</span> grps <span class="sc">%&gt;%</span> <span class="fu">filter</span>(Name <span class="sc">==</span> fg) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(Code)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract catch variables</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    catch_vars <span class="ot">&lt;-</span> this_tidync <span class="sc">%&gt;%</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>      <span class="fu">activate</span>(<span class="st">"D1,D0"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>      <span class="fu">hyper_vars</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Tot_.*_Catch"</span>, name)) <span class="sc">%&gt;%</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>      <span class="fu">filter</span>(<span class="fu">grepl</span>(code, name))</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    catch <span class="ot">&lt;-</span> purrr<span class="sc">::</span><span class="fu">map</span>(catch_vars<span class="sc">$</span>name, ncdf4<span class="sc">::</span>ncvar_get, <span class="at">nc =</span> this_nc) </span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    catch_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(catch)</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Add spatial information and reshape</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>    catch_df <span class="ot">&lt;-</span> catch_df <span class="sc">%&gt;%</span> </span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(<span class="at">box_id =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">108</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pivot_longer</span>(<span class="sc">-</span>box_id, <span class="at">names_to =</span> <span class="st">"ts"</span>, <span class="at">values_to =</span> <span class="st">"mt"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>        <span class="at">ts =</span> <span class="fu">as.numeric</span>(<span class="fu">gsub</span>(<span class="st">"X"</span>, <span class="st">""</span>, ts)) <span class="sc">-</span> <span class="dv">1</span>,</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>        <span class="at">Name =</span> fg,</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>        <span class="at">Code =</span> code</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>      ) <span class="sc">%&gt;%</span></span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>      <span class="fu">filter</span>(ts <span class="sc">&gt;</span> <span class="dv">0</span>)</span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>    catch_nc_tot_ls[[i]] <span class="ot">&lt;-</span> catch_df</span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>  catch_nc_TOT <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(catch_nc_tot_ls) <span class="sc">%&gt;%</span></span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">run =</span> this_run)</span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(catch_nc_TOT)</span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="catch-spatial-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="catch-spatial-analysis">Catch Spatial Analysis</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract catch data for all runs</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>catch_spatial <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(run, build_catch_output_TOT))</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate regional proportions</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>catch_spatial2 <span class="ot">&lt;-</span> catch_spatial <span class="sc">%&gt;%</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">region =</span> <span class="fu">ifelse</span>(box_id <span class="sc">&lt;</span> <span class="dv">92</span>, <span class="st">"AK"</span>, <span class="st">"BC"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(ts, Name, Code, run, region) <span class="sc">%&gt;%</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mt_region =</span> <span class="fu">sum</span>(mt), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(ts, Name, Code, run) <span class="sc">%&gt;%</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">mt_all =</span> <span class="fu">sum</span>(mt_region),</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">prop =</span> mt_region <span class="sc">/</span> mt_all</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(region <span class="sc">==</span> <span class="st">"AK"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>catch_spatial2 <span class="sc">%&gt;%</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(run <span class="sc">==</span> <span class="dv">2097</span>, ts <span class="sc">==</span> <span class="dv">15</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Name,prop) <span class="sc">%&gt;%</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="sc">-</span>prop)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 19 × 2
+   Name                     prop
+   &lt;chr&gt;                   &lt;dbl&gt;
+ 1 Deep_demersal           1.00 
+ 2 Sculpins                0.995
+ 3 Pollock                 0.995
+ 4 Cod                     0.965
+ 5 Skate_other             0.963
+ 6 Flathead_sole           0.960
+ 7 Skate_big               0.958
+ 8 Rockfish_pelagic_shelf  0.927
+ 9 Flatfish_shallow        0.916
+10 Arrowtooth_flounder     0.876
+11 Skate_longnose          0.854
+12 Rex_sole                0.836
+13 Rockfish_slope          0.818
+14 Sablefish               0.809
+15 Thornyhead              0.775
+16 Pacific_ocean_perch     0.771
+17 Flatfish_deep           0.750
+18 Shallow_demersal        0.722
+19 Rockfish_demersal_shelf 0.563</code></pre>
+</div>
+</div>
+<p>The proportions of catch extracted from each region compared to the total catch of the species are consistent wiht the region-specific biomass proportions, which is unsurprising because F acts homogeneously in space.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>catch_spatial2 <span class="sc">%&gt;%</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(ts <span class="sc">&gt;</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span> <span class="co"># make sure that the HCR is already going</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(ts,run,region) <span class="sc">%&gt;%</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mt_region =</span> <span class="fu">sum</span>(mt_region),</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">mt_all =</span> <span class="fu">sum</span>(mt_all)) <span class="sc">%&gt;%</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(ts,run) <span class="sc">%&gt;%</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop =</span> mt_region <span class="sc">/</span> mt_all) <span class="sc">%&gt;%</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> ts, <span class="at">y =</span> prop, <span class="at">color =</span> <span class="fu">factor</span>(run)))<span class="sc">+</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>()<span class="sc">+</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  <span class="co">#scale_y_continuous(limits = c(0,1))+</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Proportion of Total FMP Groundfish Catch in Alaska Waters"</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Time"</span>,</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Alaska Proportion"</span>,</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> <span class="st">"Run"</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="canada_analysis_files/figure-html/total-catch-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Total catch from the model is 92-98% from AK across all runs, declining over time. This is an important point and it highlights that yes, BC catch is not rounding error in this model, but that the majority still comes from the AK portion.</p>
+</section>
+<section id="total-biomass-in-alaska" class="level3">
+<h3 class="anchored" data-anchor-id="total-biomass-in-alaska">Total Biomass in Alaska</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate ecosystem-wide Alaska proportions</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>spillover <span class="ot">&lt;-</span> biom_spatial <span class="sc">%&gt;%</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(props, <span class="at">by =</span> <span class="st">"Code"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ak_mt =</span> tot_mt <span class="sc">*</span> mean_prop) <span class="sc">%&gt;%</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(Time, run) <span class="sc">%&gt;%</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">all_biom =</span> <span class="fu">sum</span>(tot_mt),      <span class="co"># Total model-wide biomass</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">all_biom_ak =</span> <span class="fu">sum</span>(ak_mt),    <span class="co"># Total Alaska biomass</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">akprop =</span> all_biom_ak <span class="sc">/</span> all_biom)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Visualization</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>spillover <span class="sc">%&gt;%</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Time, <span class="at">y =</span> akprop, <span class="at">color =</span> <span class="fu">factor</span>(run))) <span class="sc">+</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Proportion of Total FMP Groundfish Biomass in Alaska Waters"</span>,</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Time"</span>,</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Alaska Proportion"</span>,</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> <span class="st">"Run"</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="canada_analysis_files/figure-html/spillover-analysis-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Key Finding</strong>: 84-91% of total FMP groundfish biomass is in Alaska waters, with variation due to different population dynamics of Alaska-dominant vs.&nbsp;BC-dominant stocks. Catch proportion is higher than biomass proportion, likely because the two stocks that drive the catch (pollock and cod) are almost only in the AK portion. This may change if we tune cod to be a smaller biomass in the model and sablefish and POP to be a larger biomass, which would be more reflective of recent conditions in the GOA.</p>
+</section>
+</section>
+<section id="management-implications" class="level2">
+<h2 class="anchored" data-anchor-id="management-implications">Management Implications</h2>
+<section id="impact-on-harvest-control-rules-hcrs" class="level3">
+<h3 class="anchored" data-anchor-id="impact-on-harvest-control-rules-hcrs">Impact on Harvest Control Rules (HCRs)</h3>
+<p><strong>Assessment</strong>: HCR management is <strong>NOT significantly affected</strong> by the spatial issue.</p>
+<p><strong>Reasoning</strong>: - HCRs are based on B/B₀ ratios, which are proportional - F is applied equally across the model domain - Since proportions remain constant over time, B/B₀ in Alaska ≈ B/B₀ in BC ≈ B/B₀ model-wide - The proportional nature of HCR calculations means spatial distribution doesn’t affect F determination</p>
+</section>
+<section id="impact-on-optimum-yield-oy-management" class="level3">
+<h3 class="anchored" data-anchor-id="impact-on-optimum-yield-oy-management">Impact on Optimum Yield (OY) Management</h3>
+<p><strong>Assessment</strong>: OY management <strong>IS significantly affected</strong> by the spatial issue.</p>
+<p><strong>Problem</strong>: - Each year, projected catch includes biomass from BC (up to 44% for some species) - BC biomass contributes to model-wide catch projections against the cap - If only Alaska were considered, the cap might not be reached, and OY rescaling might not activate - This is particularly problematic for high-biomass species like Arrowtooth Flounder (ATF), which comprises 23% of total biomass with 12% in BC waters - <strong>However</strong>, worth noting at the moment that &gt;92% of the catch comes from Alaska. The problem may become more concerning if the biomass makeup of the ecosystem changes because we modify cod / sablefish / POP biomasses. Also worth noting that F on ATF will go even lower in the final runs, so ATF catch should become less important against the cap.</p>
+</section>
+<section id="species-of-greatest-concern" class="level3">
+<h3 class="anchored" data-anchor-id="species-of-greatest-concern">Species of Greatest Concern</h3>
+<p>Based on biomass contribution and BC proportion:</p>
+<ol type="1">
+<li><strong>Arrowtooth Flounder (ATF)</strong>: 23% of total biomass, 12% of which in BC</li>
+<li><strong>Sablefish (SBF)</strong>: 3% of total biomass, 19% of which in BC<br>
+</li>
+<li><strong>Pacific Ocean Perch (POP)</strong>: 2% of total biomass, 23% of which in BC</li>
+</ol>
+</section>
+</section>
+<section id="potential-solutions" class="level2">
+<h2 class="anchored" data-anchor-id="potential-solutions">Potential Solutions</h2>
+<section id="option-1-model-wide-management-approach" class="level3">
+<h3 class="anchored" data-anchor-id="option-1-model-wide-management-approach">Option 1: Model-Wide Management Approach</h3>
+<p><strong>Approach</strong>: Apply ecosystem cap to entire model domain - <strong>Pros</strong>: Cleaner explanation, illustrates concepts clearly - <strong>Cons</strong>: No OY management exists in BC; questionable relevance to NPFMC</p>
+</section>
+<section id="option-2-alaska-only-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="option-2-alaska-only-analysis">Option 2: Alaska-Only Analysis</h3>
+<p><strong>Approach</strong>: Rescale all plots to Alaska waters only, including B₀ - <strong>Pros</strong>: Reflects actual management boundaries - <strong>Cons</strong>: Cap reference lines would be inconsistent; management calculations still use model-wide data</p>
+</section>
+</section>
+<section id="conclusions" class="level2">
+<h2 class="anchored" data-anchor-id="conclusions">Conclusions</h2>
+<ol type="1">
+<li><p><strong>Biomass Distribution</strong>: Most OY species have &gt;80% of biomass in Alaska waters, with notable exceptions (RFD at 57%, DFS at 72%)</p></li>
+<li><p><strong>Temporal Consistency</strong>: Spatial proportions remain stable over time and across management scenarios</p></li>
+<li><p><strong>HCR Impact</strong>: Minimal—proportional calculations are unaffected by spatial distribution</p></li>
+<li><p><strong>OY Impact</strong>: Significant—BC biomass artificially inflates catch projections against Alaska-only caps</p></li>
+<li><p><strong>Key Species</strong>: Arrowtooth Flounder presents the largest concern due to high biomass and meaningful BC proportion. Sablefish and POP may become concerning if we increase their biomass in the model’s initial conditions.</p></li>
+</ol>
+<p>For a manuscript, the best course of action is probably using Option 1 and providing plenty of supplemental information on how much of the biomass (and more importantly catch) come from each part of the model, and how this mismatch is influencing the results.</p>
+<p>Rescaling model output is misleading - calculations in Atlantis are done model-wide. Also you’d need to rescale the caps as well, or else the catch will not meet the horizontal lines.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    // For code content inside modals, clipBoardJS needs to be initialized with a container option
+    // TODO: Check when it could be a function (https://github.com/zenorocha/clipboard.js/issues/860)
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

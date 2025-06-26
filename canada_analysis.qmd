@@ -2,21 +2,21 @@
 
 ## Overview
 
-This analysis explores a critical issue in applying ecosystem-based fisheries management: the spatial mismatch between the management domain (Alaska) and the model domain (Alaska + British Columbia). The Atlantis ecosystem model includes boxes representing both Alaska and British Columbia waters, but the Optimum Yield (OY) ecosystem cap is only applied to Alaska fisheries management.
+This analysis explores the issue with the spatial mismatch between the management domain (Alaska) and the model domain (Alaska + British Columbia). The Atlantis model includes boxes representing both Alaska and British Columbia waters, but the Optimum Yield (OY) ecosystem cap is only applied to Alaska fisheries management.
 
 ## Problem Statement
 
-The key challenge is that all management calculations—including Harvest Control Rules (HCRs) and OY ecosystem cap calculations—are performed using model-wide biomass and catch data (Alaska + BC), but in reality, the OY cap would only apply to Alaska waters. This creates several analytical and interpretive issues:
+The key challenge is that all management calculations—including Harvest Control Rules (HCRs) and OY ecosystem cap calculations—are performed using model-wide biomass and catch data (Alaska + BC), but in reality, the OY cap would only apply to Alaska waters. Implementing spatial HCR and OY management into Atlantis is not viable. Equally, eliminating the BC part of the model is not a real option, as it would basically require developing a new model. However, this mismatch creates several analytical and interpretive issues.
 
 ### Arguments Against Limiting Analysis to US Waters Only
 
-1. **Model Design**: The stock assessment proxy (estBo) is computed model-wide as a population property. While it could be computed for relevant boxes only, the model applies management across all boxes.
+1. **Model Design**: The unfished biomass proxy (estBo) is computed model-wide as a population property. While it could be computed for relevant boxes only, the model applies management across all boxes.
 2. **Management Reality**: HCRs are not spatial, nor is the OY cap calculation—both are based on whole-model biomass.
 3. **F Application**: Setting F=0 in BC boxes won't help because management calculations will still use total model biomass.
 
 ### Arguments For Limiting Analysis to US Waters Only
 
-1. **Management Relevance**: FMSY/proxies will be compared to Alaska-specific reference points.
+1. **Management Relevance**: FMSY/proxies will be compared to Alaska-specific reference points, whether or not we call for a specific comparison. 
 2. **Jurisdictional Reality**: The OY cap applies only to Alaska waters.
 3. **Policy Relevance**: Results should reflect actual management boundaries.
 
@@ -28,6 +28,8 @@ The key challenge is that all management calculations—including Harvest Contro
 
 library(tidyverse)
 library(data.table)
+library(tidync)
+library(ncdf4)
 
 # Set up run parameters
 run <- c(2097:2112, 2124:2143)
@@ -36,12 +38,12 @@ oy_species <- c("POL", "COD", "ATF", "SBF", "POP", "FFS", "FHS", "FFD",
                 "DFS", "DFD", "REX", "RFS", "RFP", "RFD", "THO", "SKB", 
                 "SKL", "SKO", "SCU")  # Adjust based on actual OY species
 
-# Key configuration from main analysis
-key_config <- data.frame(
-  run = run,
-  # Add other configuration parameters as needed
-  stringsAsFactors = FALSE
-)
+# read in species info
+grps <- read.csv("data/GOA_Groups.csv")
+codes <- grps %>% pull(Code)
+
+oy_names <- grps %>% filter(Code %in% oy_species) %>% pull(Name) # need this for the NC files
+
 ```
 
 ## Analysis Functions
@@ -97,22 +99,19 @@ get_AK_biom <- function(this_run) {
 ```{r biomass-analysis}
 #| warning: false
 #| message: false
+#| output: false
 
 # Extract biomass data for all runs
 biom_spatial <- bind_rows(lapply(run, get_AK_biom))
 
-# Add run configuration information
-biom_spatial2 <- biom_spatial %>%
-  left_join(key_config, by = "run")
-
 # Calculate mean proportions by species
-props <- biom_spatial2 %>%
+props <- biom_spatial %>%
   group_by(Code) %>%
   summarise(mean_prop = mean(prop)) %>%
   arrange(-mean_prop)
 
 # Calculate total biomass contributions
-total_biomass_props <- biom_spatial2 %>%
+total_biomass_props <- biom_spatial %>%
   slice_min(Time) %>%
   slice_min(run) %>%
   mutate(all_biom = sum(tot_mt)) %>%
@@ -129,7 +128,7 @@ total_biomass_props <- biom_spatial2 %>%
 #| fig-width: 12
 #| fig-height: 8
 
-biom_spatial2 %>%
+biom_spatial %>%
   mutate(Code = factor(Code, levels = sort(oy_species))) %>%
   ggplot(aes(x = Time/365, y = prop, color = factor(run))) +
   geom_line() +
@@ -147,9 +146,11 @@ biom_spatial2 %>%
 
 ## Key Findings: Biomass Distribution
 
-The analysis reveals important spatial patterns in biomass distribution:
-
 ### Species-Specific Alaska Proportions (Mean across all runs):
+
+```{r prop-table}
+props
+```
 
 - **Highest Alaska concentration** (>95%): SCU (99.6%), POL (99.5%), DFD (98.9%), COD (96.6%)
 - **Moderate Alaska concentration** (80-95%): SKO, SKB, FHS, RFP, FFS, ATF, SKL, RFS, REX, SBF, THO
@@ -159,7 +160,7 @@ The analysis reveals important spatial patterns in biomass distribution:
 
 1. **Temporal Stability**: Proportions remain constant over time across all runs
 2. **Cross-Run Consistency**: Proportions are identical across runs (short of minor variations)
-3. **Management Implications**: POL and COD, the most important commercial species, are almost entirely in Alaska waters
+3. **Management Implications**: POL and COD, the most important commercial species, and also the biggest biomass and catch in the model, are almost entirely in Alaska waters. Arrowtooth, sablefish, and POP have a sizable proportion of their biomass in BC waters (12%, 19%, 23% of total biomass). This is concerning for arrowtooth because it is a large biomass of the total model groundfish biomass (23%), and for the other two because they are important for management, they have relatively higher F, and we may need to increase their biomass in the model to match recent conditions in the GOA. 
 
 ## Catch Analysis
 
@@ -223,6 +224,7 @@ build_catch_output_TOT <- function(this_run) {
 ```{r catch-analysis}
 #| warning: false
 #| message: false
+#| output: false
 
 # Extract catch data for all runs
 catch_spatial <- bind_rows(lapply(run, build_catch_output_TOT))
@@ -241,9 +243,43 @@ catch_spatial2 <- catch_spatial %>%
   filter(region == "AK")
 ```
 
-## Ecosystem-Wide Spillover Effects
+```{r catch-props}
+catch_spatial2 %>%
+  filter(run == 2097, ts == 15) %>%
+  select(Name,prop) %>%
+  arrange(-prop)
+```
 
-### Total Biomass Spillover Analysis
+The proportions of catch extracted from each region compared to the total catch of the species are consistent wiht the region-specific biomass proportions, which is unsurprising because F acts homogeneously in space.
+
+```{r total-catch}
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 6
+#| 
+catch_spatial2 %>%
+  filter(ts > 5) %>% # make sure that the HCR is already going
+  group_by(ts,run,region) %>%
+  summarise(mt_region = sum(mt_region),
+            mt_all = sum(mt_all)) %>%
+  group_by(ts,run) %>%
+  mutate(prop = mt_region / mt_all) %>%
+  ggplot(aes(x = ts, y = prop, color = factor(run)))+
+  geom_line()+
+  #scale_y_continuous(limits = c(0,1))+
+  labs(
+    title = "Proportion of Total FMP Groundfish Catch in Alaska Waters",
+    x = "Time",
+    y = "Alaska Proportion",
+    color = "Run"
+  ) +
+  theme_bw()
+```
+
+Total catch from the model is 92-98% from AK across all runs, declining over time. This is an important point and it highlights that yes, BC catch is not rounding error in this model, but that the majority still comes from the AK portion. 
+
+### Total Biomass in Alaska
 
 ```{r spillover-analysis}
 #| warning: false
@@ -252,7 +288,7 @@ catch_spatial2 <- catch_spatial %>%
 #| fig-height: 6
 
 # Calculate ecosystem-wide Alaska proportions
-spillover <- biom_spatial2 %>%
+spillover <- biom_spatial %>%
   left_join(props, by = "Code") %>%
   mutate(ak_mt = tot_mt * mean_prop) %>%
   group_by(Time, run) %>%
@@ -276,7 +312,7 @@ spillover %>%
   theme_bw()
 ```
 
-**Key Finding**: 84-91% of total FMP groundfish biomass is in Alaska waters, with variation due to different population dynamics of Alaska-dominant vs. BC-dominant stocks.
+**Key Finding**: 84-91% of total FMP groundfish biomass is in Alaska waters, with variation due to different population dynamics of Alaska-dominant vs. BC-dominant stocks. Catch proportion is higher than biomass proportion, likely because the two stocks that drive the catch (pollock and cod) are almost only in the AK portion. This may change if we tune cod to be a smaller biomass in the model and sablefish and POP to be a larger biomass, which would be more reflective of recent conditions in the GOA. 
 
 ## Management Implications
 
@@ -296,17 +332,18 @@ spillover %>%
 
 **Problem**: 
 - Each year, projected catch includes biomass from BC (up to 44% for some species)
-- BC biomass contributes to model-wide catch projections against the Alaska-only cap
+- BC biomass contributes to model-wide catch projections against the cap
 - If only Alaska were considered, the cap might not be reached, and OY rescaling might not activate
 - This is particularly problematic for high-biomass species like Arrowtooth Flounder (ATF), which comprises 23% of total biomass with 12% in BC waters
+- **However**, worth noting at the moment that >92% of the catch comes from Alaska. The problem may become more concerning if the biomass makeup of the ecosystem changes because we modify cod / sablefish / POP biomasses. Also worth noting that F on ATF will go even lower in the final runs, so ATF catch should become less important against the cap.  
 
 ### Species of Greatest Concern
 
 Based on biomass contribution and BC proportion:
 
-1. **Arrowtooth Flounder (ATF)**: 23% of total biomass, 12% in BC
-2. **Sablefish (SBF)**: 3% of total biomass, 19% in BC  
-3. **Pacific Ocean Perch (POP)**: 2% of total biomass, 23% in BC
+1. **Arrowtooth Flounder (ATF)**: 23% of total biomass, 12% of which in BC
+2. **Sablefish (SBF)**: 3% of total biomass, 19% of which in BC  
+3. **Pacific Ocean Perch (POP)**: 2% of total biomass, 23% of which in BC
 
 ## Potential Solutions
 
@@ -320,11 +357,6 @@ Based on biomass contribution and BC proportion:
 - **Pros**: Reflects actual management boundaries
 - **Cons**: Cap reference lines would be inconsistent; management calculations still use model-wide data
 
-### Option 3: Separate Analysis Track
-**Approach**: Develop parallel Alaska-specific calculations and clearly document limitations
-- **Pros**: Transparent about spatial issues while maintaining analytical rigor
-- **Cons**: Additional complexity in analysis and interpretation
-
 ## Conclusions
 
 1. **Biomass Distribution**: Most OY species have >80% of biomass in Alaska waters, with notable exceptions (RFD at 57%, DFS at 72%)
@@ -335,15 +367,8 @@ Based on biomass contribution and BC proportion:
 
 4. **OY Impact**: Significant—BC biomass artificially inflates catch projections against Alaska-only caps
 
-5. **Key Species**: Arrowtooth Flounder presents the largest concern due to high biomass and meaningful BC proportion
+5. **Key Species**: Arrowtooth Flounder presents the largest concern due to high biomass and meaningful BC proportion. Sablefish and POP may become concerning if we increase their biomass in the model's initial conditions. 
 
-## Recommendations
+For a manuscript, the best course of action is probably using Option 1 and providing plenty of supplemental information on how much of the biomass (and more importantly catch) come from each part of the model, and how this mismatch is influencing the results. 
 
-For manuscript preparation, we recommend **Option 3**: maintain model-wide calculations while clearly documenting the spatial limitation. This approach:
-
-- Preserves analytical integrity
-- Acknowledges real-world management boundaries  
-- Provides transparent discussion of limitations
-- Allows readers to understand both the concept demonstration and practical constraints
-
-The spatial mismatch represents a common challenge in ecosystem modeling where model domains don't perfectly align with management jurisdictions, making this a valuable case study for the broader ecosystem-based fisheries management community.
+Rescaling model output is misleading - calculations in Atlantis are done model-wide. Also you'd need to rescale the caps as well, or else the catch will not meet the horizontal lines. 
