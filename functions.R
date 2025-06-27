@@ -520,11 +520,10 @@ get_H <- function(this_run, do_mature){
     abun_var_names <- all_var_names[grepl("_Nums", all_var_names) & grepl(fg, all_var_names)]
     
     # Read all abundance data at once
-    abun_data <- map(abun_var_names, ~ {
-      data <- ncdf4::ncvar_get(this_ncdata, varid = .x)
-      # Avoid setNA() - use direct indexing and na.rm instead
-      # This eliminates the expensive lapply(setNA) bottleneck
-      apply(data, MARGIN = 3, FUN = sum, na.rm = TRUE)
+    abun_data <- map(abun_var_names, function(var_name) {
+      raw_data <- ncdf4::ncvar_get(this_ncdata, varid = var_name)
+      raw_data[, (boundary_boxes + 1), ] <- NA  # Same as setNA logic
+      apply(raw_data, MARGIN = 3, FUN = sum, na.rm = TRUE)
     })
     
     # Create abundance dataframe
@@ -576,7 +575,6 @@ get_H <- function(this_run, do_mature){
   return(h_frame)
   
 }
-
 
 #' Calculate Pollock Consumption Proportions by Predators
 #'
