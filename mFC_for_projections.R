@@ -64,11 +64,15 @@ dat_final <- rbind(dat_long1, dat_long2) %>%
 dat_1990s <- dat_final %>%
   filter(Year %in% c(1990:1999)) %>%
   group_by(Code) %>%
-  summarise(F = mean(F, na.rm = T))
+  summarise(`F` = mean(`F`, na.rm = T))
 
-# turn to mFC
+# turn to mFC, but only where needed
+exp_rate_stocks <- c("SKL","SKO","SKB","RFD","THO","DFD","SCU")
+
 dat_1990s <- dat_1990s %>%
-  mutate(mFC = 1-exp(-`F`/365))
+  rowwise() %>%
+  mutate(mFC = ifelse(Code %in% exp_rate_stocks,`F`/365,1-exp(-`F`/365))) %>%
+  ungroup()
 
 # Other groups ------------------------------------------------------------
 # Lots of groups to fill in. The only groups without estimates for 1990s but with estimates for later decades are skates
@@ -118,11 +122,13 @@ dat_1990s %>%
 dat_2010s <- dat_final %>%
   filter(Year %in% c(2010:2019)) %>%
   group_by(Code) %>%
-  summarise(F = mean(F, na.rm = T))
+  summarise(`F` = mean(`F`, na.rm = T))
 
 # turn to mFC
 dat_2010s <- dat_2010s %>%
-  mutate(mFC = 1-exp(-`F`/365))
+  rowwise() %>%
+  mutate(mFC = ifelse(Code %in% exp_rate_stocks,`F`/365,1-exp(-`F`/365))) %>%
+  ungroup()
 
 # compare for groups that have new values
 dat_2010s %>%
