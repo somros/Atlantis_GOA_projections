@@ -1,0 +1,39 @@
+Species (species code),Port/area,Non-trawl,NPT,PTR,PTR/NPT
+Alaska Plaice Flounder (133),GOA,NA,0.11,NA,0.11
+Arrowtooth Flounder (121),GOA,NA,0.08,0.08,NA
+Atka Mackerel (193),GOA,NA,0.17,0.16,NA
+Bocaccio Rockfish (137),GOA,0.42,NA,NA,NA
+Butter Sole (126),GOA,NA,0.15,NA,0.15
+Canary Rockfish (146),GOA,0.51,NA,NA,NA
+China Rockfish (149),GOA,0.46,NA,NA,NA
+Copper Rockfish (138),GOA,0.44,NA,NA,NA
+Dover Sole (124),GOA,NA,0.09,NA,0.09
+Dusky Rockfish (172),GOA,0.45,0.17,0.18,NA
+English Sole (128),GOA,NA,0.14,0.14,NA
+Flathead Sole (122),GOA,NA,0.15,0.15,NA
+Northern Rockfish (136),GOA,0.23,0.16,0.16,NA
+Octopus (870),GOA,0.55,0.58,NA,0.58
+Pacific Cod (110),GOA,NA,0.36,0.36,NA
+Pacific Ocean Perch (141),GOA,0.64,0.19,0.20,NA
+Pollock (270),GOA,0.05,0.11,0.11,NA
+Quillback Rockfish (147),GOA,0.56,NA,NA,NA
+Redbanded Rockfish (153),GOA,0.35,0.16,NA,0.16
+Redstripe Rockfish (158),GOA,0.45,NA,NA,NA
+Rex Sole (125),GOA,NA,0.36,0.50,NA
+Rock Sole (123),GOA,NA,0.18,0.18,NA
+Rosethorn Rockfish (150),GOA,0.44,NA,NA,NA
+Rougheye Rockfish (151),GOA,0.38,0.23,0.22,NA
+Sablefish (blackcod) (710),GOA,NA,2.05,NA,2.03
+Shortraker Rockfish (152),GOA,0.39,0.38,0.18,NA
+Silvergray Rockfish (157),GOA,0.43,NA,NA,NA
+Skate Alaska (703),GOA,0.39,NA,NA,NA
+Skate Big (702),GOA,0.43,0.46,0.44,NA
+Skate Longnose (701),GOA,0.40,0.46,0.42,NA
+Skate Other (700),GOA,0.35,NA,NA,0.30
+Starry Flounder (129),GOA,NA,0.08,NA,0.08
+Thornyhead Rockfish (Idiots) (143),GOA,NA,0.65,NA,0.65
+Tiger Rockfish (148),GOA,0.44,NA,NA,NA
+Vermilion Rockfish (184),GOA,0.59,NA,NA,NA
+Widow Rockfish (156),GOA,0.76,NA,NA,NA
+Yelloweye Rockfish (145),GOA,NA,0.25,NA,0.25
+Yellowtail Rockfish (155),GOA,0.64,NA,NA,NA
