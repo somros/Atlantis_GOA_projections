@@ -10,23 +10,23 @@
 # This last point opens up a whole different conversation
 # For the purpose of getting the reference poinbts with the F curves, we should use 1990-2000 rates
 # This is because those are the biomasses we calibrated the model to
-# The burn-in could use those values, then switch to 2010-2020 values for projections
+# The burn-in could use those values, then switch to 2015-2020 values for projections
 # Start projecting from 2020 because that is the end of the ROMS hindcast
-# and BTW, what years physics should the burn-in use?
-# The thing that makes most sense is run the hindcast ROMS for the burn-in to 2020
-# This opens you up to people checking the biomass values at the ned of the hindcast / beginning of the projections
-# which is fair, but hard to attain for this model honestly without recalibrating
-# one argument against the hindcast is that you would then need to force catch
-# like it becomes it own separate piece / paper really
-# another argument against the hindcast is that we'd then have the heatwave issue - which trickles into F considerations for Pcod
 
 # maybe the way to go is: 
 # 1990's F for reference point calculations
-# short burn-in with 1999 ROMS in loop (or 1990's average, we know how to do that). 15-20-25 years or whatever
-# start projections from 2020 but be upfront about how different the system looks from the GOA stocks in 2020 (even plot biomass differences for keay stocks and if they are awful do some calibration)
+# 30-yr burn-in with 1990's climatology
+# tune initial biomasses so that they are closer to 2015-2020 averages than 1990
+# start projections from 2020 
+# the goal ultimately is to be in the right ballpark in 2020
+# this is particularly important for COD, POP, SBF
 
 library(readxl)
 library(tidyverse)
+
+# read in species info
+grps <- read.csv("data/GOA_Groups.csv")
+codes <- grps %>% pull(Code)
 
 # FMP groundfish ----------------------------------------------------------
 
@@ -79,7 +79,22 @@ dat_1990s <- dat_1990s %>%
 # skates have exploitation rates
 # I'd say use old 1/4 M values for consistency...
 
-# halibut is worth updating with something better than 1/4 M if available. Talking about it with Carey - not straightforward
+# Pacific halibut
+# the target is SPR 46%
+# we need to convert that to biomass as per the assessment and get the equivalent depletion rference point
+# we then need to profile over F and get the F that leads us there
+# the old model used a low F for HAL, 1/4 M
+# F in the new model will be much higher, and as such we will need to calibrate HAL most likely
+# to get the model closer to where it will be, use FMSY from the OY paper
+# FMSY for HAL was 0.0115, which corresponded to 44% depletion
+# this is probably in the ballpark of F46%, so use that for calibration purposes
+f_hal <- 0.0115
+mfc_hal <- 1-exp(-f_hal/365)
+
+dat_1990s <- rbind(dat_1990s,
+                   data.frame("Code"="HAL",
+                              "F" = f_hal,
+                              "mFC" = mfc_hal))
 
 # For all others use the old values (for now)
 
@@ -144,3 +159,44 @@ dat_2010s %>%
 # for stocks exploited more lightly we may have the opposite problem and have to introduce more mL or mQ
 
 # NB: these values have to be calibrated
+
+# write mfc file
+
+# neet to get a recent mFC for all the values that are NOT being changed to 1990s
+oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Atlantis_GOA_OY_MS/GOA_harvest_background.prm"
+ref_harvest <- readLines(oldfile)
+
+# get harvest parameters outside loop
+ref_mfc <- list()
+for(sp in codes) {
+  
+  mfc_line <- ref_harvest[grep(paste0("mFC_", sp, " "), ref_harvest) + 1]
+  mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
+  
+  ref_mfc[[sp]] <- list(mfc = mfc)
+}
+
+newfile <- paste0('mFC_tuning/mfc_projections_BEFORE_TUNING.prm')
+file.create(newfile)
+
+for(i in 1:length(codes)){
+  
+  sp <- codes[i]
+  parname <- paste0("mFC_", sp, " 33")
+  
+  print(sp)
+  
+  if(sp %in% dat_1990s$Code){
+    parval <- dat_1990s %>% filter(Code == sp) %>% pull(mFC)
+  } else {
+    parval <- ref_mfc[[which(names(ref_mfc)==sp)]]$mfc
+  }
+  
+  parval <- signif(parval, 8)
+  
+  parline <- paste(as.character(c(parval,rep(0,32))),collapse = " ")
+  
+  cat(parname, file=newfile, append=TRUE,'\n')
+  cat(parline, file=newfile, append=TRUE, '\n')
+  
+}
