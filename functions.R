@@ -34,7 +34,7 @@
 #' \dontrun{
 #' fishery_data <- pull_fishery_info(2097)
 #' }
-pull_fishery_info <- function(this_run){
+pull_fishery_info <- function(this_run, ecocap = T){
   
   print(this_run)
   
@@ -49,12 +49,18 @@ pull_fishery_info <- function(this_run){
   biom <- read.csv(paste(wd, biom_file, sep = "/"), sep = " ", header = T)
   catch <- read.csv(paste(wd, catch_file, sep = "/"), sep = " ", header = T)
   harvest <- readLines(paste(wd, harvest_prm, sep = "/"))
-  ecocap_report <- read.delim(ecocap_file, sep = " ")
+  
+  if(ecocap){
+    ecocap_report <- read.delim(ecocap_file, sep = " ")
+  }
   
   # subset time early on if necessary
   biom <- biom %>% filter(Time/365 <= yr_end)
   catch <- catch %>% filter(Time/365 <= yr_end)
-  ecocap_report <- ecocap_report %>% filter(Time/365 <= yr_end)
+  
+  if(ecocap){
+    ecocap_report <- ecocap_report %>% filter(Time/365 <= yr_end)
+  }
   
   # Process biomass data once, outside the loop
   # Convert to long format once and use faster string splitting
@@ -68,7 +74,8 @@ pull_fishery_info <- function(this_run){
   # Pre-filter to only relevant species and times
   biom_filtered <- biom_long %>%
     filter(Code %in% oy_species,
-           Time > 0, Time < max(Time)) %>%
+           #Time > 0, 
+           Time < max(Time)) %>%
     select(-Code.Age)  # Remove original column
   
   # Pre-process harvest parameters outside loop
@@ -121,6 +128,9 @@ pull_fishery_info <- function(this_run){
     pivot_longer(-Time, names_to = "Code", values_to = "catch_mt")
   
   # join operation
+  # to compute F from exploitation rates we need to stagger catch and biomass
+  # catch at t356 / biomass at t0
+  # this is not so important past the first year
   result_list <- list()
   for(sp in oy_species) {
     sp_params <- harvest_params[[sp]]
@@ -130,7 +140,7 @@ pull_fishery_info <- function(this_run){
       left_join(filter(catch_long, Code == sp), by = c("Time", "Code")) %>%
       left_join(filter(biom_tot_all, Code == sp), by = c("Time", "Code")) %>%
       mutate(
-        mu = catch_mt / biom_mt_selex,
+        mu = catch_mt / lag(biom_mt_selex),
         f = -log(1 - mu),
         biom_frac = biom_mt_tot / sp_params$estbo,
         fref = sp_params$fref,
@@ -143,17 +153,21 @@ pull_fishery_info <- function(this_run){
   res_df <- do.call(rbind, result_list)
   
   # Process ecocap report
-  ecocap_report <- ecocap_report %>%
-    select(Time, SpeciesName, FisheryName, SpBased_Frescale, PostSystCap_Frescale) %>%
-    filter(SpeciesName %in% oy_species,
-           FisheryName %in% oy_fleets) %>%
-    mutate(oy_rescale = PostSystCap_Frescale / SpBased_Frescale) %>%
-    select(Time, SpeciesName, oy_rescale) %>%
-    rename(Code = SpeciesName)
-  
-  # Final join
-  res_df <- res_df %>%
-    left_join(ecocap_report, by = c("Time", "Code"))
+  if(ecocap){
+    
+    ecocap_report <- ecocap_report %>%
+      select(Time, SpeciesName, FisheryName, SpBased_Frescale, PostSystCap_Frescale) %>%
+      filter(SpeciesName %in% oy_species,
+             FisheryName %in% oy_fleets) %>%
+      mutate(oy_rescale = PostSystCap_Frescale / SpBased_Frescale) %>%
+      select(Time, SpeciesName, oy_rescale) %>%
+      rename(Code = SpeciesName)
+    
+    # Final join
+    res_df <- res_df %>%
+      left_join(ecocap_report, by = c("Time", "Code"))
+    
+  }
   
   # TODO: remove this chunk when we add estBo to the harvest.prm file for all stocks
   res_df <- res_df %>%
