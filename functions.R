@@ -34,7 +34,7 @@
 #' \dontrun{
 #' fishery_data <- pull_fishery_info(2097)
 #' }
-pull_fishery_info <- function(this_run, ecocap = T){
+pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
   
   print(this_run)
   
@@ -95,7 +95,7 @@ pull_fishery_info <- function(this_run, ecocap = T){
       estbo <- estbo_vec[sp_idx]
       fref_vec <- as.numeric(strsplit(harvest[grep("Fref\t", harvest) + 1], split = " ")[[1]])
       fref <- -log(1 - fref_vec[sp_idx])
-    } else {
+    } else { # TODO: you can't take fref from the mfc file because those values are tuned so that the realized f is right
       estbo <- NA
       mfc_line <- harvest[grep(paste0("mFC_", sp, " "), harvest) + 1]
       mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
@@ -118,9 +118,20 @@ pull_fishery_info <- function(this_run, ecocap = T){
     group_by(Time, Code, w) %>%
     summarise(biom_mt_selex = sum(mt), .groups = 'drop')
   
-  biom_tot_all <- biom_filtered %>%
-    group_by(Time, Code) %>%
-    summarise(biom_mt_tot = sum(mt), .groups = 'drop')
+  if(ssb){
+    
+    biom_tot_all <- biom_filtered %>%
+      left_join(fspb_df, by = c("Code", "Age"="age")) %>%
+      group_by(Time, Code) %>%
+      summarise(biom_mt_tot = sum(mt * fspb), .groups = 'drop')
+    
+  } else {
+    
+    biom_tot_all <- biom_filtered %>%
+      group_by(Time, Code) %>%
+      summarise(biom_mt_tot = sum(mt), .groups = 'drop')
+    
+  }
   
   # Process catch data for all species
   catch_long <- catch %>%
