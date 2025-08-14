@@ -1,14 +1,14 @@
 # Alberto Rovellini
-# 07/28/2025
+# 08/07/2025
 # Code to create mFC ramps for reference point simulations
 library(tidyverse)
 
 # read in groups
 grps <- read.csv("data/GOA_Groups.csv")
 
-# start from reference run's PRM - for now use 2212 but will have to change this
+# start from reference run's PRM - using run 2238 as best start
 # read in reference PRM file
-ref_prm_file <- "AtlantisGOAV0_02212/GOA_harvest_background.prm"
+ref_prm_file <- "AtlantisGOAV0_02238/GOA_harvest_background.prm"
 ref_prm <- readLines(ref_prm_file)
 
 # HCR stocks and Pacific halibut ------------------------------------------
@@ -40,10 +40,12 @@ fmsy_atlantis <- fmsy_atlantis %>%
 ramp <- c(0, 0.25, 0.5, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2, 3, 4)
 
 # create a folder to store the harvest.prm and the run_atlantis.sh files
+# if files already exist the file writing below will get corrupted so purge old versions first
 outdir <- "output/single_species_runs/mfc_ramps/"
-if(!dir.exists(outdir)){
-  dir.create(outdir, recursive = T)
+if(dir.exists(outdir)){
+  unlink(outdir, recursive = T)
 }
+dir.create(outdir, recursive = T)
 
 sim_idx <- 0 # start the counter, it will be used to label the runs
 ref_table <- data.frame()
@@ -119,7 +121,7 @@ for(i in 1:length(hcr_stocks$Code)){
                       idx,
                       ".prm -m GOAMigrations.csv -s GOA_Groups.csv -q GOA_fisheries.csv -d outputFolder",
                       idx)
-    writeLines(this_sh, paste(outdir, this_sh_file))
+    writeLines(this_sh, paste(outdir, this_sh_file, sep = "/"))
     
     # fill in the reference table
     ref_table <- rbind(ref_table, data.frame(
@@ -209,7 +211,7 @@ for (i in 1:length(oy_groups)){
                     idx,
                     ".prm -m GOAMigrations.csv -s GOA_Groups.csv -q GOA_fisheries.csv -d outputFolder",
                     idx)
-  writeLines(this_sh, paste(outdir, this_sh_file))
+  writeLines(this_sh, paste(outdir, this_sh_file, sep = "/"))
   
   # fill in the reference table
   ref_table <- rbind(ref_table, data.frame(
@@ -228,6 +230,6 @@ for (i in 1:length(oy_groups)){
 }
 
 # write out the reference table
-write.csv(ref_table, paste(outdir, "reference_table.csv"), row.names = F)
+write.csv(ref_table, paste0(outdir, "reference_table.csv"), row.names = F)
 
 # done
