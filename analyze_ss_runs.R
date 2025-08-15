@@ -5,7 +5,6 @@
 # Extract terminal biomass and catch
 # Plot yield curves and depletion curves; overlay Rovellini et al. (2025) values, and stock assessment FOFL values 
 # write out table with B0 (all species) and FMSY (HCR species)
-
 library(tidyverse)
 
 # Data needed -------------------------------------------------------------
@@ -214,6 +213,8 @@ p_biom <- ss_df %>%
   facet_wrap(~Code, scales = "free", ncol = 1)
 p_biom
 
+# ggsave
+
 p_catch <- ss_df %>%
   filter(Code %in% fmsy_grp) %>%
   left_join(fmsy_ss, by = "Code") %>%
@@ -228,8 +229,12 @@ p_catch <- ss_df %>%
   facet_wrap(~Code, scales = "free", ncol = 1)
 p_catch
 
+# ggsave
+
 # Write output ------------------------------------------------------------
 
-# produce an output table
+# produce an output table for b0 and fmsy, which will be used to build the HCR parameters for the ms projections
+out_tab <- b0_df %>%
+  left_join(fmsy_ss, by = "Code")
 
-
+# write.csv(out_tab, "output/ref_points_from_SS_runs.csv")

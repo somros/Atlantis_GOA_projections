@@ -13,7 +13,7 @@ fished <- grps %>% filter(IsFished==1) %>% pull(Code)
 
 # Reference run with expected (target) mfc --------------------------------
 # reference PRM with the target mFC
-ref_run <- 2179
+ref_run <- 2240
 ref_wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", ref_run)
 ref_harvest_prm <- list.files(ref_wd)[grep("GOA_harvest_.*.prm", list.files(ref_wd))]
 ref_harvest <- readLines(paste(ref_wd, ref_harvest_prm, sep = "/"))
@@ -37,7 +37,7 @@ f_expected <- do.call(rbind, lapply(names(ref_mfc), function(x) {
 
 # Runt to tune ------------------------------------------------------------
 # what run are you tuning
-this_run <- 2209
+this_run <- 2241
 
 # prepare file paths
 wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)

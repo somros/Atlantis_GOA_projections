@@ -166,6 +166,8 @@ catch_to_tac <- goa_specs_clean %>%
   arrange(-ratio) %>%
   mutate(w = n():1)
 
+write.csv(catch_to_tac, "data/w_from_harvest_specs.csv", row.names = F)
+
 # alternatively, do TAC/ABC
 # in principle this is what is done in the BSAI under the OY
 # tac_to_abc <- goa_specs_clean %>%

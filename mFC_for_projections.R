@@ -247,3 +247,8 @@ for(i in 1:length(codes)){
   cat(parline, file=newfile, append=TRUE, '\n')
   
 }
+
+# sanity check
+# dat_1990s %>%
+#   left_join(dat_recent, by = "Code") %>%
+#   mutate(prop = F.y / F.x)
