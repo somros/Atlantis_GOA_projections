@@ -19,7 +19,7 @@
 # tune initial biomasses so that they are closer to 2015-2020 averages than 1990
 # start projections from 2020 
 # the goal ultimately is to be in the right ballpark in 2020
-# this is particularly important for COD, POP, SBF
+# for the projection paper, HCR species won't be affected
 
 library(readxl)
 library(tidyverse)
@@ -160,9 +160,13 @@ dat_2010s %>%
 
 # NB: these values have to be calibrated
 
-# write mfc file
 
-# neet to get a recent mFC for all the values that are NOT being changed to 1990s
+# Create PRM files --------------------------------------------------------
+
+# first create a file with 1990s mean F
+# this will be used for the base model and for the burn-in in the projection runs
+
+# need to get a recent mFC for all the values that are NOT being changed to 1990s
 oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Atlantis_GOA_OY_MS/GOA_harvest_background.prm"
 ref_harvest <- readLines(oldfile)
 
@@ -176,7 +180,8 @@ for(sp in codes) {
   ref_mfc[[sp]] <- list(mfc = mfc)
 }
 
-newfile <- paste0('mFC_tuning/mfc_projections_BEFORE_TUNING.prm')
+if(!dir.exists("mFC_tuning/")){dir.create("mFC_tuning/")}
+newfile <- paste0('mFC_tuning/mfc_1990s_BEFORE_TUNING.prm')
 file.create(newfile)
 
 for(i in 1:length(codes)){
@@ -188,6 +193,48 @@ for(i in 1:length(codes)){
   
   if(sp %in% dat_1990s$Code){
     parval <- dat_1990s %>% filter(Code == sp) %>% pull(mFC)
+  } else {
+    parval <- ref_mfc[[which(names(ref_mfc)==sp)]]$mfc
+  }
+  
+  parval <- signif(parval, 8)
+  
+  parline <- paste(as.character(c(parval,rep(0,32))),collapse = " ")
+  
+  cat(parname, file=newfile, append=TRUE,'\n')
+  cat(parline, file=newfile, append=TRUE, '\n')
+  
+}
+
+# now get a second PRM file for recent F values (avg 2015-2020)
+# this will also have to be tuned with the one-yr runs
+# this will be used for the projection runs
+dat_recent <- dat_final %>%
+  filter(Year %in% c(2016:2020)) %>%
+  group_by(Code) %>%
+  summarise(`F` = mean(`F`, na.rm = T))
+
+# turn to mFC
+dat_recent <- dat_recent %>%
+  rowwise() %>%
+  mutate(mFC = ifelse(Code %in% exp_rate_stocks,`F`/365,1-exp(-`F`/365))) %>%
+  ungroup() %>%
+  filter(!is.nan(mFC))
+
+# NB: these values have to be calibrated
+
+newfile <- paste0('mFC_tuning/mfc_recent_BEFORE_TUNING.prm')
+file.create(newfile)
+
+for(i in 1:length(codes)){
+  
+  sp <- codes[i]
+  parname <- paste0("mFC_", sp, " 33")
+  
+  print(sp)
+  
+  if(sp %in% dat_recent$Code){
+    parval <- dat_recent %>% filter(Code == sp) %>% pull(mFC)
   } else {
     parval <- ref_mfc[[which(names(ref_mfc)==sp)]]$mfc
   }
