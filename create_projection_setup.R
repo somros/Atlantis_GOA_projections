@@ -292,11 +292,118 @@ for(i in 1:nrow(cap_df)){
   writeLines(this_harvest, paste0("AtlantisGOA_MS/", filename))
 }
 
+# TODO: do test that the mgmt and F change kicks in at the right time
+# 2 runs: base / template file; and one of these (but move burnin! do like 3 years + 2)
+
+
 # Force.prm ---------------------------------------------------------------
+# 4 climate scenarios
+# one with no climate at all and stable conditions - this one is the base force.prm
+# use that as template to create the other ones
+force_file <- "AtlantisGOA_MS/GOA_force.prm"
+force_template <- readLines(force_file)
 
+scenarios <- c(126, 245, 585)
+runtime <- 30 + 85
 
+for(i in 1:length(scenarios)){
+  
+  clim <- scenarios[i]
+  filename <- paste0("AtlantisGOA_MS/GOA_force_ssp", clim,".prm")
+  this_force <- force_template
+  
+  # hydro
+  start_h <- grep("nhdfiles", this_force) - 1
+  end_h <- grep("hd0.name", this_force) + 1
+  
+  head_file <- this_force[1:start_h]
+  tail_file <- this_force[end_h:length(this_force)]
+  
+  # make hydro files section
+  h_section <- paste("nhdfiles", runtime)
+  yr <- 2015
+  for(j in 1:runtime){
+    if(j < 30){
+      string <- paste0("hd", j-1, ".name forcings/hydro/goa_hydro_1999.nc")
+    } else {
+      string <- paste0("hd", j-1, ".name ../forcings_proj/ssp", clim, "/hydro/goa_hydro_", yr, ".nc")
+      yr <- yr + 1
+    }
+    h_section <- c(h_section, string)
+  }
+  
+  # bind after each step
+  this_force <- c(head_file, h_section, tail_file)
+  
+  # now temperature
+  start_t <- grep("ntempfiles", this_force) - 1
+  end_t <- grep("Temperature0.name", this_force) + 1
+  
+  head_file <- this_force[1:start_t]
+  tail_file <- this_force[end_t:length(this_force)]
+  
+  # make hydro files section
+  t_section <- paste("ntempfiles", runtime)
+  yr <- 2015
+  for(j in 1:runtime){
+    if(j < 30){
+      string <- paste0("Temperature", j-1, ".name forcings/temp/mean_1990s_temperature.nc")
+    } else {
+      string <- paste0("Temperature", j-1, ".name ../forcings_proj/ssp", clim, "/temp/goa_roms_temp_", yr, ".nc")
+      yr <- yr + 1
+    }
+    t_section <- c(t_section, string)
+  }
+  
+  # bind after each step
+  this_force <- c(head_file, t_section, tail_file)
+  
+  # salinity
+  start_s <- grep("nsaltfiles", this_force) - 1
+  end_s <- grep("Salinity0.name", this_force) + 1
+  
+  head_file <- this_force[1:start_s]
+  tail_file <- this_force[end_s:length(this_force)]
+  
+  # make hydro files section
+  s_section <- paste("nsaltfiles", runtime)
+  yr <- 2015
+  for(j in 1:runtime){
+    if(j < 30){
+      string <- paste0("Salinity", j-1, ".name forcings/temp/mean_1990s_salinity.nc")
+    } else {
+      string <- paste0("Salinity", j-1, ".name ../forcings_proj/ssp", clim, "/temp/goa_roms_salt_", yr, ".nc")
+      yr <- yr + 1
+    }
+    s_section <- c(s_section, string)
+  }
+  
+  # bind after each step
+  this_force <- c(head_file, s_section, tail_file)
+  
+  # plankton
+  start_p <- grep("use_external_scaling", this_force) - 1
+  
+  head_file <- this_force[1:start_p]
+  tail_file <- c(
+    "use_external_scaling 1",
+    "",
+    "scale_all_mortality 0",
+    "mortality_addition 0",
+    "",
+    paste0("externalBiologyForcingFile scalar_proj_ROMS_ssp", clim, "_115yr.nc"),
+    "",
+    "externalBiologyForcingFile_rewind 0"
+  )
+  
+  this_force <- c(head_file, tail_file)
 
+  # write force file
+  writeLines(this_force, filename)
+}
 
 # sh files ----------------------------------------------------------------
+
+# now build 40 sh files that will be used to launch these runs
 
 
