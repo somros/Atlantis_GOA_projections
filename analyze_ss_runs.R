@@ -7,6 +7,8 @@
 # write out table with B0 (all species) and FMSY (HCR species)
 library(tidyverse)
 
+rm(list = ls())
+
 # Data needed -------------------------------------------------------------
 
 # functional groups
@@ -61,13 +63,13 @@ fmsy_oy <- read.csv("data/fmsy_Rovellini_2025.csv")
 fmsy_oy <- fmsy_oy %>% left_join(grp %>% select(Code, LongName))
 
 # output file lists
-biom_files <- list.files("output/single_species_runs/output/test_5yr/", pattern = "BiomIndx", full.names = T)
-catch_files <- list.files("output/single_species_runs/output/test_5yr/", pattern = "Catch", full.names = T)
+biom_files <- list.files("output/single_species_runs/output/out-ss/", pattern = "BiomIndx", full.names = T, recursive = T)
+catch_files <- list.files("output/single_species_runs/output/out-ss/", pattern = "Catch", full.names = T, recursive = T)
 
 # run information (change for real runs)
-yr_end <- 3
-burnin <- 0
-avg_period <- 1
+yr_end <- 80
+burnin <- 30
+avg_period <- 10
 
 # Biomass -----------------------------------------------------------------
 
@@ -176,6 +178,11 @@ ss_df <- ss_df %>%
   select(-Code.y, -tmp) %>%
   rename(Code = Code.x)
 
+# get input target F (i.e. the F that the input mFC corresponds to)
+# there are very large differences between input F and realized F
+ss_df <- ss_df %>%
+  mutate(targ_f = -365 * log(1 - targ_mfc))
+
 # get b0, b40, bmsy frames
 b0_df <- ss_df %>% 
   filter(f == 0) %>% 
@@ -195,8 +202,9 @@ fmsy_ss <- ss_df %>%
   filter(Code %in% fmsy_grp) %>%
   group_by(Code) %>%
   slice_max(catch_mt) %>%
-  select(Code, f) %>%
-  rename(fmsy_realized = f)
+  select(Code, f, targ_f) %>%
+  rename(fmsy_realized = f,
+         fmsy_input = targ_f)
 
 # Curves ------------------------------------------------------------------
 # this is only for species for which we need FMSY
@@ -225,7 +233,7 @@ p_catch <- ss_df %>%
   geom_vline(aes(xintercept = atlantis_fmsy), linetype = "dashed", color=  "orange")+
   theme_bw()+
   scale_y_continuous(limits = c(0,NA))+
-  labs(x = "Fishing mortality", y = "Spawning biomass (1000 mt)")+
+  labs(x = "Fishing mortality", y = "Catch (1000 mt)")+
   facet_wrap(~Code, scales = "free", ncol = 1)
 p_catch
 
