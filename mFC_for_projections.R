@@ -86,9 +86,9 @@ dat_1990s <- dat_1990s %>%
 # the old model used a low F for HAL, 1/4 M
 # F in the new model will be much higher, and as such we will need to calibrate HAL most likely
 # to get the model closer to where it will be, use FMSY from the OY paper
-# FMSY for HAL was 0.0115, which corresponded to 44% depletion
+# FMSY for HAL was 0.1151807, which corresponded to 44% depletion
 # this is probably in the ballpark of F46%, so use that for calibration purposes
-f_hal <- 0.0115
+f_hal <- 0.1151807
 mfc_hal <- 1-exp(-f_hal/365)
 
 dat_1990s <- rbind(dat_1990s,

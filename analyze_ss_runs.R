@@ -6,6 +6,9 @@
 # Plot yield curves and depletion curves; overlay Rovellini et al. (2025) values, and stock assessment FOFL values 
 # write out table with B0 (all species) and FMSY (HCR species)
 library(tidyverse)
+library(patchwork)
+library(here)
+library(viridis)
 
 rm(list = ls())
 
@@ -16,7 +19,9 @@ grp <- read.csv("data/GOA_Groups.csv")
 verts <- grp %>% filter(GroupType %in% c("MAMMAL","SHARK","BIRD","FISH")) %>% pull(Code)
 fmsy_grp <- c("POL", "COD", "POP", "SBF", "HAL") # these are groups managed with HCR and halibut; they will need the FMSY proxy and have done the full mfc ramp
 other_fmp_grp <- c("ATF", "FHS", "REX", "FFS", "FFD", "SKL", "SKB", "SKO", "RFS", "RFP", "RFD", "THO", "DFS", "DFD", "SCU")
-oy_grp <- c(fmsy_grp, other_fmp_grp)
+#oy_grp <- c(fmsy_grp, other_fmp_grp)
+# for debugging only delete when done
+oy_grp <- c("POL", "COD", "POP", "HAL")
 
 # read maturity ogives as presented in the biol.prm file
 bio_prm <- "data/GOAbioparam_SS.prm"
@@ -57,23 +62,27 @@ for(i in 1:length(oy_grp)) {
 
 # key of mfc applied to each run
 key <- read.csv("output/single_species_runs/mfc_ramps/ reference_table.csv") # fix rthe space
+# debugging
+key <- key %>% filter(idx<70)
 
 # fmsy values from Rovellini et al. (2025)
 fmsy_oy <- read.csv("data/fmsy_Rovellini_2025.csv")
 fmsy_oy <- fmsy_oy %>% left_join(grp %>% select(Code, LongName))
 
 # output file lists
-biom_files <- list.files("output/single_species_runs/output/out-ss/", pattern = "BiomIndx", full.names = T, recursive = T)
-catch_files <- list.files("output/single_species_runs/output/out-ss/", pattern = "Catch", full.names = T, recursive = T)
+biom_files <- list.files("output/single_species_runs/output/steepness_test/", pattern = "BiomIndx", full.names = T, recursive = T)
+catch_files <- list.files("output/single_species_runs/output/steepness_test/", pattern = "Catch", full.names = T, recursive = T)
 
 # run information (change for real runs)
-yr_end <- 80
+yr_end <- 60
 burnin <- 30
 avg_period <- 10
 
 # Biomass -----------------------------------------------------------------
 
 make_ss_df <- function(this_run, ssb = T){
+  
+  # this_run <- 3
   
   print(this_run)
   
@@ -109,11 +118,20 @@ make_ss_df <- function(this_run, ssb = T){
   
   # Process all species at once using vectorized operations
   # Create biomass summaries for all species
-  biom_selex_all <- biom_filtered %>%
+  # Albi: changed code so that it uses max biomass the year prior to account for recruitment / aging dynamics
+  # NB: right now we have one time step per year so this should be identical to how it was before
+  biom_selex_max <- biom_filtered %>%
     left_join(selex_df, by = "Code") %>%
     filter(Age >= startage) %>%
     group_by(Time, Code) %>%
-    summarise(biom_mt_selex = sum(mt), .groups = 'drop')
+    summarise(biom_mt_selex = sum(mt), .groups = 'drop') %>% # sum across cohort for total biomass for a group
+    mutate(Year = Time / 365) %>%
+    mutate(Year = floor(Year)) %>%
+    group_by(Year, Code) %>%
+    slice_max(biom_mt_selex) %>%
+    ungroup() %>%
+    mutate(Time = Year * 365) %>% # restore the Time column
+    select(-Year)
   
   if(ssb){
     
@@ -142,7 +160,7 @@ make_ss_df <- function(this_run, ssb = T){
   result_list <- list()
   for(sp in oy_grp) { # to make sure we don't mess up the staggering, do one sp at a time
 
-    sp_data <- biom_selex_all %>%
+    sp_data <- biom_selex_max %>%
       filter(Code == sp) %>%
       left_join(filter(catch_long, Code == sp), by = c("Time", "Code")) %>%
       left_join(filter(biom_tot_all, Code == sp), by = c("Time", "Code")) %>%
@@ -212,12 +230,18 @@ fmsy_ss <- ss_df %>%
 p_biom <- ss_df %>%
   filter(Code %in% fmsy_grp) %>%
   left_join(b40_df, by = "Code") %>%
-  ggplot(aes(x = f, y = biom_mt_tot / 1000))+
+  left_join(fmsy_ss, by = "Code") %>%
+  left_join(fmsy_oy %>% select(Code, atlantis_fmsy), by = "Code") %>%
+  filter(!is.na(f)) %>%  # for plotting purposes - ideally at some point you should no longer have NaNs
+  ggplot(aes(x = f, y = biom_mt_tot / 1000, color = targ_f))+
   geom_point()+
+  scale_color_viridis()+
   geom_hline(aes(yintercept = b40 / 1000), linetype = "dashed", color = "red")+
+  geom_vline(aes(xintercept = fmsy_realized), linetype = "dashed", color=  "blue")+
+  geom_vline(aes(xintercept = atlantis_fmsy), linetype = "dashed", color=  "orange")+
   theme_bw()+
   scale_y_continuous(limits = c(0,NA))+
-  labs(x = "Fishing mortality", y = "Spawning biomass (1000 mt)")+
+  labs(x = "Fishing mortality", y = "Spawning biomass (1000 mt)", color = "Input F")+
   facet_wrap(~Code, scales = "free", ncol = 1)
 p_biom
 
@@ -227,17 +251,23 @@ p_catch <- ss_df %>%
   filter(Code %in% fmsy_grp) %>%
   left_join(fmsy_ss, by = "Code") %>%
   left_join(fmsy_oy %>% select(Code, atlantis_fmsy), by = "Code") %>%
-  ggplot(aes(x = f, y = catch_mt / 1000))+
+  filter(!is.na(f)) %>%  # for plotting purposes - ideally at some point you should no longer have NaNs
+  ggplot(aes(x = f, y = catch_mt / 1000, color = targ_f))+
   geom_point()+
+  scale_color_viridis()+
   geom_vline(aes(xintercept = fmsy_realized), linetype = "dashed", color=  "blue")+
   geom_vline(aes(xintercept = atlantis_fmsy), linetype = "dashed", color=  "orange")+
   theme_bw()+
   scale_y_continuous(limits = c(0,NA))+
-  labs(x = "Fishing mortality", y = "Catch (1000 mt)")+
+  labs(x = "Fishing mortality", y = "Catch (1000 mt)", color = "Input F")+
   facet_wrap(~Code, scales = "free", ncol = 1)
 p_catch
 
-# ggsave
+# Combine plots side by side
+combined_plot <- p_biom | p_catch
+combined_plot
+
+ggsave(here("plots", "combined_plots_steepness.png"), combined_plot, width = 8, height = 9, dpi = 300)
 
 # Write output ------------------------------------------------------------
 
@@ -246,3 +276,22 @@ out_tab <- b0_df %>%
   left_join(fmsy_ss, by = "Code")
 
 # write.csv(out_tab, "output/ref_points_from_SS_runs.csv")
+
+
+# Diagnostics -------------------------------------------------------------
+
+# check the relationship between input F and realized F
+ss_df %>%
+  filter(Code %in% fmsy_grp) %>%
+  ggplot(aes(x = targ_f, y = f))+
+  geom_point()+
+  theme_bw()+
+  geom_abline(color = "red")+
+  labs(x = "Input F", y = "Realized F")+
+  facet_grid(~Code)
+  
+# across the board, perceived F is far, far higher than input F
+# this is odd. I understand when the opposite happens - mFC can't meet the target because of low availability
+# one hypothesis to test is that mFC is catching what it should, but that biomass is "invisible" to the TXT output
+# this results in higher catch than biomass
+# you don't see it at low F because the population does not go that low
