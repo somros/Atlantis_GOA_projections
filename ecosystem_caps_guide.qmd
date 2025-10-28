@@ -1,0 +1,637 @@
+---
+title: "Ecosystem Caps in Atlantis: Implementation Guide"
+author: "Alberto Rovellini"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+engine: knitr
+embed-resources: true
+---
+
+## Overview
+
+This document describes the implementation of ecosystem caps functionality in Atlantis. The ecosystem cap approach builds on existing fixed fishing mortality (*mFC*) and harvest control rule (HCR) capabilities, allowing users to model system-level catch constraints similar to the Optimum Yield (OY) cap applied in Alaska groundfish fisheries.
+
+A functioning version of the Atlantis code implementing the caps is available [here](https://github.com/somros/v6665_OY/tree/main).
+
+The general idea is to use ecosystem caps on projected catch to derive a scalar that works together with the familiar `bm->SP_FISHERYprms[sp][nf][mFC_scale_id]` to rescale `mFC`.
+
+The ecosystem cap functionality combines single-species management with user-defined ecosystem-level catch limits. The method consists of three main components:
+
+1. **Single-species management**: Apply harvest control rules or fixed fishing mortality to determine projected F for the following year
+2. **Catch projection**: Calculate expected catch for the following year based on projected F and current stock status
+3. **Ecosystem cap rescaling**: If aggregate projected catch exceeds the cap, rescale fishing mortality rates using stock-specific weights
+
+Most of the calculations occur in file `atManageAnnual.c`. These are the other files I had to modify:
+
+- `atHarvestCatch.c`
+- `atManage.h`
+- `atManagetoXML.x`
+- `atManageIO.c`
+- `atManageParamIO.c`
+- `atmovement.c`
+- `atUtilGroupIO.c`
+- `atlantisboxmodel.h`
+- `atManageSetup.c`
+- `atFunctGroup.h`
+- `atlantismain.c`
+- `atdemography.c`
+
+**IMPORTANT NOTES**
+
+* This works on v6665 because that's the code base for Atlantis GOA. The current Atlantis trunk contains an early version of this method that is behind the development version presented here and is currently not functional. The goal will be to port all this back to the trunk eventually.
+* This management routine is executed once every year on the last day of the year.
+* This method has been tested with one fleet and no spatial constraints, and it is an extension of the single-species HCR functions. At the moment, this approach is mutually exclusive with the guild-based HCRs. This won't work with dynamic effort models, and its integration with the assessment module has not been tested.
+
+
+## Parameters
+
+The ecosystem cap routine is activated by setting `do_sumB_HCR 2`, Where values of 0 and 1 correspond to single-species HCR and guild-level HCR, respectively.
+
+All ecosystem cap parameters are defined in `harvest.prm`:
+
+`FlagSystCapSP` (vector, one entry per functional group)
+
+- Values: 1 = included in ecosystem cap, 0 = excluded
+- Determines which species contribute to the aggregate catch calculation
+
+`SystCapSPpref` (vector, one entry per functional group)
+
+- Relative importance weights for rescaling when cap is exceeded
+- Higher values = smaller reductions when rescaling is needed
+- Must be > 0 for all groups included in the cap
+
+`Ecosystm_Cap_tonnes` (scalar)
+
+- The ecosystem catch cap in tonnes
+- Aggregate projected catch is compared against this value
+
+`FixedAssessMort` (vector, one entry per functional group)
+
+- Fixed natural mortality rates for catch projection calculations
+- Used when `M_est_method = 0`
+
+`maxF_aggregate` (scalar)
+
+- 0 = Use max(mFC) across fleets, 1 = Use sum(mFC) across fleets
+- Determines how maximum fishing mortality is computed when multiple fleets target same species - whether it is the largest value in the `mFC` vector (legacy in Atlantis) or a sum of all the values.
+
+`use_time_avg_biom` (scalar)
+
+- 0 = Use average of min/max biomass during the year, 1 = Use rolling average biomass
+- Controls biomass calculation method for catch projection
+
+`use_time_avg_wgt` (scalar)
+
+- 0 = Use average of min/max weight during the year, 1 = Use rolling average weight
+- Controls weight calculation method for catch projection (vertebrates only)
+
+`syst_cap_calc_method` (scalar)
+
+- 0 = Use Baranov catch equation, 1 = Use simple biomass × F method
+- Determines catch projection method (1 recommended)
+
+`M_est_method` (scalar)
+
+- 0 = Fixed M from FixedAssessMort, 1 = Dynamic M as Z-F, 2 = Atlantis internal M, 3 = Assessment M
+- Controls natural mortality estimation method, but this is only used when `syst_cap_calc_method 0`
+
+`K_cap_rolling_period` (scalar)
+
+- Number of years for rolling average calculation
+- Currently set to 1
+
+`flagSSBforHCR` (scalar)
+
+- 0 = Use total biomass for HCR calculations (Atlantis legacy), 1 = Use spawning stock biomass
+- Determines biomass type used in harvest control rules
+
+`do_sumB_HCR` (scalar)
+
+- 0 = Single-species HCR, 1 = Guild-level HCR, 2 = Ecosystem cap method
+- Main activation flag - must be set to 2 to enable ecosystem caps
+
+Here is a template of the required Parameters in harvest.prm. Edit to match your settings (e.g., change length of vector parameters to match your model groups).
+
+```
+# Parameters related to the ecosystem cap calculations
+FlagSystCapSP 78 # a vector with one entry for every group with the individual entries set to 1 if included in the system cap, 0 if not.
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+SystCapSPpref 78 # vector with one entry for every group, these are the weightings used inr escalaing if sum(ABC) > system cap.
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+FixedAssessMort 78 # vector with one entry for every group, this is gthe fixed assessment M assumed for use in calculating the System Cap associated expected catches - overwritten with the assess_nat_mort vector values if assess.prm included in the run command
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+maxF_aggregate 0 # this flag sets whether want maxF as sum over mFC (set to 1) or max of mFC  (set to 0)
+
+use_time_avg_biom 1 # this flag is relevant for the system_cap_calc, if using N not B in calculating expected catch, this flag is whether use average of min, max weight stored over the year (set to 0) or rolling_wgt  (set to 1)
+
+use_time_avg_wgt  1 # this flag is relevant for the system_cap_calc, if using B not N in calculating expected catch, this flag is whether use the average of min, max B stored over the year (set to 0) or rolling_B (set to 1)
+
+syst_cap_calc_method 1 # this flag sets whether the biomass used to estimate expected catch is via bumbers and the Baranov catch equation (set to 0) or just average Biomass as calculated dynamically in Atlantis (set to 1)
+
+M_est_method 0 # this flag sets which option is used to calculate M – read in from prm file (set to 0), using Z – F (set to 1), dynamically calculated in Atlantis (set to 2) or estimated in the assessment routine (set to 3)
+
+Ecosystm_Cap_tonnes 400000
+
+K_cap_rolling_period 1
+
+do_sumB_HCR 2
+```
+
+## Approach
+
+The methodology is organized in three key steps: single-species management, catch projections, and ecosystem cap rescaling.
+
+### Component 1: Single-Species Management
+
+The first component determines fishing mortality for the following year using single-species approaches. This occurs at the end of each simulation year in the `Ecosystem_Cap_Frescale()` function. For species with `tier = 0`, F for the following year is always fixed.
+
+#### Harvest Control Rules
+
+For species with `tier > 0`, fishing mortality is calculated using harvest control rules based on current stock biomass relative to reference points:
+
+```c
+if (Bcurr >= BrefA) {
+/* Greater than BrefA (e.g. B48) so use F48 */
+FTARG = FrefA;
+//FTARG = Fcurr;
+} else if ((Bcurr < BrefA) && (Bcurr >= BrefB)) {
+/* Less than BrefA and greater than BrefB (e.g. B40), for stability remain at F48 */
+FTARG = FrefA;
+} else if ((Bcurr < BrefB) && (Bcurr > Blim)) {
+/* Less than BrefB and greater than Blim (e.g. B20) so reduce F rate */
+FTARG = FrefA * ((Bcurr - Blim) / (BrefB - Blim));
+} else {
+/* Less than Blim so set F = 0 */
+FTARG = 0;
+}
+```
+
+Key reference points as per regular Atlantis HCR code:
+
+- **BrefA**: Target biomass reference point (e.g., B40%)
+- **BrefB**: Threshold biomass reference point  
+- **Blim**: Limit reference point below which F = 0
+- **FrefA**: Target fishing mortality rate
+
+#### Biomass Estimation
+
+The HCR needs a biomass estimate. The method tested here used perfect knowledge. I have not tested introducing bias or error but it should be easy to do. Current biomass can be calculated using total stock biomass (as previously done) or spawning stock biomass:
+
+```c
+if (bm->flagSSBforHCR){
+  /* Using SSB in the HCR - HAP 2024 - I wrote this using script from atSSBDataGen.c */
+  for (cohort = 0; cohort < FunctGroupArray[sp].numCohortsXnumGenes; cohort++) {
+    for (ij = 0; ij < bm->nbox; ij++) {
+      for (b = 0; b < bm->boxes[ij].nz; b++) {
+        Braw += ((bm->boxes[ij].tr[b][FunctGroupArray[sp].structNTracers[cohort]] + bm->boxes[ij].tr[b][FunctGroupArray[sp].resNTracers[cohort]]) * bm->boxes[ij].tr[b][FunctGroupArray[sp].NumsTracers[cohort]] * FunctGroupArray[sp].habitatCoeffs[WC] * bm->X_CN * mg_2_tonne) * FunctGroupArray[sp].scaled_FSPB[cohort];
+        // Note, HAP tried this withough FSPB and it produced the same value as bm->totfishpop[sp] * bm->X_CN * mg_2_tonne
+      }
+    }
+  }
+  fprintf(llogfp, "Time: %e %s, Braw (total SSB) before Assess_Add_Error() - %e\n", bm->dayt, FunctGroupArray[sp].groupCode, Braw);
+} else {
+  Braw = bm->totfishpop[sp] * bm->X_CN * mg_2_tonne;
+  fprintf(llogfp, "Time: %e %s, Braw (total stock biomass) before Assess_Add_Error() - %e\n", bm->dayt, FunctGroupArray[sp].groupCode, Braw);
+}
+Bcurr = Assess_Add_Error(bm, er_case, Braw, est_bias, est_cv);
+```
+
+#### F Rescaling
+
+The target F from the HCR is used to rescale the base fishing mortality:
+
+```c
+Fstep1 = Fcurr / (FunctGroupArray[sp].speciesParams[maxmFC_id] * 365.0);  // As Fcurr is annual but mFC is daily
+F_rescale = Fstep1 * (FTARG / (Fcurr + small_num));  // Re-scale existing F (need to do vs mFC rather than just Fcurr as code applies it against mFC)
+```
+At this point the code has the projected F for next year based on stock status. 
+
+### Component 2: Catch Projection
+
+The second component calculates expected catch for the following year using the projected fishing mortality from Component 1. Two methods are available.
+
+#### Method Selection
+
+**syst_cap_calc_method**
+
+- 0 = Baranov catch equation (more complex, accounts for natural mortality)  
+- 1 = Simple biomass × F approximation (faster, simpler, **currently recommended**)
+
+**Note**: The simple biomass-based method (`syst_cap_calc_method = 1`) is the currently recommended and most extensively tested approach. I tried pretty hard using the Baranov method with varying options for deriving M, but it always ended up underestimating the projected catch. This led to insufficient rescaling of `mFC` under a constraining cap, and to realized aggregate catch exceeding the caps. Getting M right is really hard, Atlantis tracks it in theory but the units are hard to understand. We developed a method to get M from Z and F, but each stock is on its own schedule in terms of ageing which complicates tracking M when this cap management routine is executed (December 31). **For the purpose of evaluating the effects of different cap values on the system**, the biomass approximation seems to make the caps work well so I am using that.
+
+##### Method 1: Simple Biomass × F (syst_cap_calc_method = 1) - **Recommended**
+
+This is the simpler and currently preferred method that approximates catch as the product of fishing mortality, selectivity, and biomass:
+
+```c
+if (!bm->use_time_avg_biom) {
+    if (bm->dayt > 0.0 && FunctGroupArray[sp].min_B[nc] > MAXDOUBLE) {
+        quit("Ecosystem_Cap_Frescale: Time %e min_B for %s-%d is larger than is feasible (%e) something has gone wrong\n", 
+             bm->dayt, FunctGroupArray[sp].groupCode, nc, FunctGroupArray[sp].min_B[nc]);
+    }
+    if (bm->dayt > 0.0 && FunctGroupArray[sp].max_B[nc] < MINDOUBLE) {
+        quit("Ecosystem_Cap_Frescale: Time %e max_B for %s-%d is smaller than is feasible (%e) something has gone wrong\n", 
+             bm->dayt, FunctGroupArray[sp].groupCode, nc, FunctGroupArray[sp].max_B[nc]);
+    }
+    this_Biom = (FunctGroupArray[sp].min_B[nc] + FunctGroupArray[sp].max_B[nc]) / 2.0;
+} else {
+    this_Biom = FunctGroupArray[sp].rolling_B[nc][bm->K_rolling_cap_num];
+}
+this_expect_catch = mFC * mpa_scale * mFC_change_scale * sel * this_Biom * bm->X_CN * mg_2_tonne;
+tot_expect_catch += this_expect_catch;
+```
+
+The biomass values used in this calculation come from a rolling average system managed by the `Store_Min_Max_Avg()` function in `atmovement.c`, which tracks both minimum/maximum values and rolling averages for weights and biomass and will use the former if `use_time_avg_biom 0` and the latter if `use_time_avg_biom 1`.
+
+###### Biomass Tracking and Averaging
+
+The `Store_Min_Max_Avg()` function maintains several biomass and weight metrics. For vertebrates, it tracks weight at age and biomass. The weight at age is used in the Baranov method, however the simpler biomass approximation won't be needing that.
+
+1. **Minimum and Maximum Values**: Tracked continuously to capture seasonal variation
+```c
+if (FunctGroupArray[sp].isVertebrate == TRUE) {
+    this_wgt = VERTinfo[sp][n][SN_id] + VERTinfo[sp][n][RN_id];
+    
+    if (FunctGroupArray[sp].min_wgt[n] > this_wgt) {
+        FunctGroupArray[sp].min_wgt[n] = this_wgt;
+    }
+    if (FunctGroupArray[sp].max_wgt[n] < this_wgt) {
+        FunctGroupArray[sp].max_wgt[n] = this_wgt;
+    }
+    
+    /* Now their biomass */
+    this_biom = this_wgt * totden[sp][n];
+    
+    if (FunctGroupArray[sp].min_B[n] > this_biom) {
+        FunctGroupArray[sp].min_B[n] = this_biom;
+    }
+    if (FunctGroupArray[sp].max_B[n] < this_biom) {
+        FunctGroupArray[sp].max_B[n] = this_biom;
+    }
+    
+    ...
+```
+2. **Rolling Averages**: Updated monthly using a sliding window approach
+- Array positions 0 to `K_rolling_cap_num-1` store historical monthly values
+- Position `K_rolling_cap_num` stores the computed rolling average
+- Each month, values shift left and new values are added
+
+3. **Initialization**: At the first call to this method in a run, all historical positions are filled with current biomass. Then, new values are added. The code works by month, so if you set `K_cap_rolling_period 1` you'll be using 12 rolling values, etc.
+
+For vertebrate species, both weight and biomass are tracked:
+```c
+    ...
+    
+    /* And now the rolling values - Iterate the list and get new values */
+    this_sum_W = 0.0;
+    this_sum_B = 0.0;
+
+    //printf("Albi Debug...
+
+    if (!bm->rolling_cap_initialised[sp][n]) { // Initialise if the first time through
+        for (nlist = 0; nlist < bm->K_rolling_cap_num; nlist++) {
+            FunctGroupArray[sp].rolling_wgt[n][nlist] = this_wgt;
+            FunctGroupArray[sp].rolling_B[n][nlist] = this_biom;
+
+            //fprintf(llogfp, "Albi Roll 1: ...
+        }
+        FunctGroupArray[sp].rolling_wgt[n][bm->K_rolling_cap_num] = this_wgt;
+        FunctGroupArray[sp].rolling_B[n][bm->K_rolling_cap_num] = this_biom;
+        bm->rolling_cap_initialised[sp][n] = 1;
+
+        //fprintf(llogfp, "Albi Roll 2: ...
+
+    } else {
+        if (bm->newmonth) {
+            for (nlist = 0; nlist < (bm->K_rolling_cap_num - 1); nlist++) {
+
+                //printf("Albi Debug: ...
+
+                //fprintf(llogfp, "Albi Roll 3: ...
+
+                FunctGroupArray[sp].rolling_wgt[n][nlist] = FunctGroupArray[sp].rolling_wgt[n][nlist + 1];
+                FunctGroupArray[sp].rolling_B[n][nlist] = FunctGroupArray[sp].rolling_B[n][nlist + 1];
+                this_sum_W += FunctGroupArray[sp].rolling_wgt[n][nlist];
+                this_sum_B += FunctGroupArray[sp].rolling_B[n][nlist];
+            
+                //fprintf(llogfp, "Albi Roll 4: ...
+            }
+            FunctGroupArray[sp].rolling_wgt[n][bm->K_rolling_cap_num - 1] = this_wgt;
+            FunctGroupArray[sp].rolling_B[n][bm->K_rolling_cap_num - 1] = this_biom;
+            this_sum_W += this_wgt;
+            this_sum_B += this_biom;
+            FunctGroupArray[sp].rolling_wgt[n][bm->K_rolling_cap_num] = this_sum_W / this_denom;
+            FunctGroupArray[sp].rolling_B[n][bm->K_rolling_cap_num] = this_sum_B / this_denom;
+
+            //fprintf(llogfp, "Albi Roll 5: ...
+        }
+    }
+}
+```
+For invertebrates, only biomass is tracked.
+
+##### Method 2: Baranov Catch Equation (syst_cap_calc_method = 0)
+
+```c
+/* Find what the predicted catch would be by applying fishing mortality */
+if (!bm->syst_cap_calc_method) {
+    // Bring in M
+    switch (bm->M_est_method) {
+        case fixed_input_M:
+            calcM = FunctGroupArray[sp].speciesParams[assess_nat_mort_id];
+            break;
+        case Z_and_F_based:
+            if (FunctGroupArray[sp].isVertebrate == TRUE) {
+                this_Num = 0.0;
+                for (k = 0; k < maxstock; k++) {
+                    this_start += bm->calcTrackedMort[sp][nc][k][start_id];
+                    this_end += bm->calcTrackedMort[sp][nc][k][endNum_id];
+                }
+            } else {
+                this_Biom = 0.0;
+                for (k = 0; k < maxstock; k++) {
+                    this_start += bm->calcTrackedMort[sp][nc][k][start_id];
+                    this_end += bm->calcTrackedMort[sp][nc][k][endNum_id];
+                }
+            }
+            Z_Est = 1.0 - (this_end / (this_start + small_num));
+            if (Z_Est < Fcurr) {
+                warn("Time: %e for %s - Z calculation too small versus number caught so set to F as default in Ecosystem_Cap_Frescale\n", 
+                     bm->dayt, FunctGroupArray[sp].groupCode);
+                Z_Est = Fcurr;
+            }
+            calcM = Z_Est - Fcurr;
+
+            fprintf(llogfp, "OY DEBUG 7.4: Time: %e %s-%d %s, this_start: %e, this_end: %e, Z_Est: %e, Fcurr: %e, calcM: %e\n", 
+                    bm->dayt, FunctGroupArray[sp].groupCode, nc, FisheryArray[nf].fisheryCode, 
+                    this_start, this_end, Z_Est, Fcurr, calcM);
+            break;
+        case full_dynamic_M_est:
+            calcM = 0.0;
+            counter = 0.0;
+            for (k = 0; k < maxstock; k++) {
+                calcM += (bm->calcTrackedMort[sp][nc][k][finalM1_id] + bm->calcTrackedMort[sp][nc][k][finalM2_id]);
+                counter++;
+            }
+            
+            calcM /= counter;
+            break;
+        case assess_M_est:
+            if (!do_assess) {
+                quit("Ecosystem_Cap_Frescale: For %s Can't use option %d for M_est_method if do_assess = 0\n", 
+                     FunctGroupArray[sp].groupCode, assess_M_est);
+            } else {
+                M = bm->NAssess[sp][est_M_id];
+            }
+        default:
+            quit("No such option for syst_cap_calc_method. Please set to 0 for fixed M (read in from harvest.prm), 1 for M = Z-F, 2 for fully dynamic estimation of M given in model predation, or 3 for M estimated in an assessment\n");
+    }
+    
+    // Apply Baranov catch equation by cohort
+    expectF = mFC * mpa_scale * mFC_change_scale * sel;
+    Catch_Eqn_Denom = expectF + calcM;
+    survival = 1.0 - exp(-1.0 * Catch_Eqn_Denom);
+
+    //fprintf(llogfp, "CHECKPOINT 8\n");
+    fprintf(llogfp, "OY DEBUG 8: Time: %e %s-%d %s, expectF: %e, mFC: %e, mpa_scale: %e, mFC_change_scale: %e, sel: %e, calcM: %e, Catch_Eqn_Denom: %e, survival: %e\n", 
+            bm->dayt, FunctGroupArray[sp].groupCode, nc, FisheryArray[nf].fisheryCode, 
+            expectF, mFC, mpa_scale, mFC_change_scale, sel, calcM, Catch_Eqn_Denom, survival);
+    
+    // Assume all stocks and genetypes being pooled to get the Numbers at age
+    // TODO: Do per Stock and geneotype separately
+    if (expectF > 0) { // Only do this if non-zero F to avoid time wasting loops
+        if (FunctGroupArray[sp].isVertebrate == TRUE) {
+            this_Num = 0.0;
+            for (k = 0; k < maxstock; k++) {
+                this_Num += bm->calcTrackedMort[sp][nc][k][start_id];
+            }
+            this_Biom = (Wgt * bm->X_CN * mg_2_tonne) * this_Num;
+        } else {
+            this_Biom = 0.0;
+            for (k = 0; k < maxstock; k++) {
+                this_Biom = bm->calcTrackedMort[sp][nc][k][start_id] * bm->X_CN * mg_2_tonne;
+            }
+        }
+        this_expect_catch = this_Biom * (expectF / Catch_Eqn_Denom) * survival;
+        tot_expect_catch += this_expect_catch;
+
+        fprintf(llogfp, "OY DEBUG 8.1: Time: %e %s-%d %s, this_Num: %e, Wgt: %e, this_Biom: %e\n", 
+                bm->dayt, FunctGroupArray[sp].groupCode, nc, FisheryArray[nf].fisheryCode, 
+                this_Num, Wgt * bm->X_CN * mg_2_tonne, this_Biom);
+    } else { //ALBI: adding this here so that below in the unallocated excess part we have sensible this_expect_catch
+        this_expect_catch = 0.0;
+        tot_expect_catch += this_expect_catch;
+    }
+}
+```
+
+###### Natural Mortality Options (`bm->M_est_method`)
+
+Only relevant if you use Baranov.
+
+`M_est_method` (**currently set to 0**)
+- **0**: Fixed input M from `FixedAssessMort` parameter (**recommended**)
+- **1**: Dynamic M calculated as Z - F  
+- **2**: M tracked internally by Atlantis
+- **3**: M estimated by assessment submodel (requires `do_assess = 1`)
+
+###### Biomass Averaging Options
+
+`use_time_avg_biom` and **use_time_avg_wgt** (**currently set to 1**)
+- 0 = Use average of min/max values during the year
+- 1 = Use rolling average over `K_cap_rolling_period` years (**recommended**)
+
+`K_cap_rolling_period` (**currently set to 1**)
+- Number of years for rolling average calculation
+- Current recommended value: 1 year
+
+### Component 3: Ecosystem Cap Rescaling
+
+The third component compares aggregate projected catch to the ecosystem cap and rescales fishing mortality if needed.
+
+#### Rescaling Algorithm
+
+See details on the method [here](https://swzlz7-alberto-rovellini.shinyapps.io/oy_rescaling_app/). If total projected catch as computed in Component 2 exceeds the cap, the rescaling uses an optimization approach:
+
+```c
+if (tot_expect_catch > bm->Ecosystm_Cap_tonnes) {
+
+    // Define variables for the bisection method
+    double a = 0.0;               // Lower bound for bisection
+    double b = 2.0;              // Upper bound for bisection
+    double tol = 1e-7;            // Tolerance for bisection
+    int max_iter = 100;           // Maximum iterations
+    int iter = 0;                 // Iteration counter
+    double optimal_mult = 0.0;    // The optimal multiplier we will find
+    int sp_iter;                  // Loop variable for species inside the bisection method
+    
+    // Initial ratio of cap to total catch
+    double r = bm->Ecosystm_Cap_tonnes / tot_expect_catch;
+    
+    fprintf(llogfp, "OY BISECTION: Time: %e Starting bisection method, cap: %e, tot_expect_catch: %e, r: %e\n", 
+            bm->dayt, bm->Ecosystm_Cap_tonnes, tot_expect_catch, r);
+    
+    // Bisection method to find optimal multiplier
+    while ((b - a) > tol && iter < max_iter) {
+        double c = (a + b) / 2.0;  // Calculate midpoint
+        double h = (tol * 10.0 > (b - a) / 100.0) ? tol * 10.0 : (b - a) / 100.0;  // Step size for numerical derivative
+        
+        // Calculate function values for derivative
+        double sum_plus_h = 0.0;
+        double sum_minus_h = 0.0;
+        double orig_catch, r_scaled_plus, r_scaled_minus;
+        
+        // Calculate sum for c+h and c-h
+        for (sp_iter = 0; sp_iter < bm->K_num_tot_sp; sp_iter++) {
+            if (FunctGroupArray[sp_iter].isFished == TRUE) {
+                // Skip species not part of OY
+                if ((!FunctGroupArray[sp_iter].speciesParams[flagFonly_id]) || 
+                    (!FunctGroupArray[sp_iter].speciesParams[flag_systcap_sp_id]))
+                    continue;
+                
+                orig_catch = FunctGroupArray[sp_iter].speciesParams[sp_fishery_expected_catch_id];
+                if (orig_catch) {
+                    // Calculate rescaled catch for c+h
+                    r_scaled_plus = pow(r, 1.0 / (FunctGroupArray[sp_iter].speciesParams[sp_fishery_pref_id] * (c + h)));
+                    sum_plus_h += orig_catch * r_scaled_plus;
+                    
+                    // Calculate rescaled catch for c-h
+                    r_scaled_minus = pow(r, 1.0 / (FunctGroupArray[sp_iter].speciesParams[sp_fishery_pref_id] * (c - h)));
+                    sum_minus_h += orig_catch * r_scaled_minus;
+                }
+            }
+        }
+        
+        // Calculate objective function values (squared difference between cap and sum)
+        double f_plus = pow(bm->Ecosystm_Cap_tonnes - sum_plus_h, 2);
+        double f_minus = pow(bm->Ecosystm_Cap_tonnes - sum_minus_h, 2);
+        
+        // Numerical derivative using central difference approximation
+        double deriv_c = (f_plus - f_minus) / (2.0 * h);
+        
+        fprintf(llogfp, "OY BISECTION ITER: Time: %e iter: %d, a: %e, b: %e, c: %e, sum_plus_h: %e, sum_minus_h: %e, deriv_c: %e\n", 
+                bm->dayt, iter, a, b, c, sum_plus_h, sum_minus_h, deriv_c);
+        
+        // Check if we've found a stationary point (derivative close to zero)
+        if (fabs(deriv_c) < tol) {
+            optimal_mult = c;
+            break;
+        } else if (deriv_c > 0) {
+            // Function is increasing, move left (minimum is to the left)
+            b = c;
+        } else {
+            // Function is decreasing, move right (minimum is to the right)
+            a = c;
+        }
+        
+        iter++;
+    }
+    
+    // If we exited the loop without breaking, set optimal_mult to the midpoint
+    // When bisection method completes, set optimal_mult to final midpoint regardless of why we exited
+    if (iter >= max_iter || fabs(b - a) <= tol) {
+        optimal_mult = (a + b) / 2.0;
+    }
+
+    fprintf(llogfp, "OY BISECTION RESULT: Time: %e Final optimal_mult: %e after %d iterations\n", 
+            bm->dayt, optimal_mult, iter);
+    
+    // Now apply the optimal multiplier to calculate the final rescaling factors
+    for (sp = 0; sp < bm->K_num_tot_sp; sp++) {
+        if (FunctGroupArray[sp].isFished == TRUE) {
+            // Follow-through for sp that are not part of OY
+            if ((!FunctGroupArray[sp].speciesParams[flagFonly_id]) || 
+                (!FunctGroupArray[sp].speciesParams[flag_systcap_sp_id]))
+                continue;
+            
+            orig_expected_catch = FunctGroupArray[sp].speciesParams[sp_fishery_expected_catch_id];
+            if (orig_expected_catch) {
+                // Calculate the rescaling factor using optimal_mult
+                double r_scaled = pow(r, 1.0 / (FunctGroupArray[sp].speciesParams[sp_fishery_pref_id] * optimal_mult));
+                
+                // Calculate final expected catch
+                final_expected_catch = orig_expected_catch * r_scaled;
+                
+                // Store intermediate values for reporting (similar to the original code structure)
+                FunctGroupArray[sp].speciesParams[sp_fishery_expected_catch_step1_id] = orig_expected_catch;
+                FunctGroupArray[sp].speciesParams[sp_fishery_expected_catch_step2_id] = final_expected_catch;
+                FunctGroupArray[sp].speciesParams[intermediate_scalar] = r_scaled;
+                
+                // Calculate rescale scalar (f_rescale in R)
+                rescale_scalar = final_expected_catch / orig_expected_catch;
+                
+                // Make sure we escape division by 0
+                if (!_finite(rescale_scalar)) {
+                    rescale_scalar = 0;
+                }
+                
+                // Apply rescaling to fishing mortality
+                for (nf = 0; nf < bm->K_num_fisheries; nf++) {
+                    bm->SP_FISHERYprms[sp][nf][orig_mFC_scale_id] = bm->SP_FISHERYprms[sp][nf][mFC_scale_id]; // For reporting purposes
+                    bm->SP_FISHERYprms[sp][nf][mFC_scale_id] *= rescale_scalar;
+                    
+                    fprintf(llogfp, "OY BISECTION APPLY: Time: %e %s %s, optimal_mult: %e, r: %e, r_scaled: %e, orig_catch: %e, final_catch: %e, rescale_scalar: %e\n", 
+                            bm->dayt, FunctGroupArray[sp].groupCode, FisheryArray[nf].fisheryCode, 
+                            optimal_mult, r, r_scaled, 
+                            orig_expected_catch, final_expected_catch, rescale_scalar);
+                }
+            }
+        }
+    }
+}
+```
+
+##### Bisection Method
+
+### Weight-Based Rescaling Algorithm
+
+The rescaling algorithm transforms the vector of projected catches $C$ into rescaled catches $C'$ such that the following conditions are satisfied:
+
+1. $\sum_{i=1}^n C'_i \leq OY$
+2. $C'_i \leq C_i$ 
+3. If $C_i > 0$, then $C'_i > 0$
+
+If rescaling is needed (i.e., $\sum_{i=1}^n C_i > OY$), the algorithm first calculates the reduction ratio:
+
+$$r = \frac{OY}{\sum_{i=1}^n C_i}$$
+
+The algorithm then finds an optimal multiplier $m$ that, when applied with the weights $w_i$, produces rescaled catches that sum exactly to the cap:
+
+$$C'_i = C_i \times r^{(1/(w_i \times m))}$$
+
+Where:
+
+- $C'_i$ = Rescaled catch for stock $i$
+- $C_i$ = Original projected catch for stock $i$  
+- $r$ = Reduction ratio (cap / total projected catch)
+- $w_i$ = Weight for stock $i$ (from `SystCapSPpref`)
+- $m$ = Optimal multiplier found by numerical optimization
+
+The optimal multiplier $m$ is found by minimizing the objective function:
+
+$$f(m) = \left(OY - \sum_{i=1}^n C_i \times r^{(1/(w_i \times m))}\right)^2$$
+
+Stocks with higher weights undergo smaller reductions because the exponent $1/(w_i \times m)$ becomes smaller as $w_i$ increases, preserving catch for high-value stocks while reducing catch more substantially for low-value stocks.
+
+## Implementation Notes
+
+### Key Assumptions
+
+1. **Perfect Knowledge**: The method assumes complete information about current stock biomass
+2. **F-Catch Relationship**: Changes in imposed F translate directly to proportional changes in catch
+3. **Biomass Stability**: Biomass in the following year is similar to the current year
+4. **Implementation**: Fishing mortality can be precisely controlled to achieve target catches
+
+### Output and Reporting
+
+The function generates detailed logging output for debugging and analysis:
+- Original and rescaled F values
+- Projected catches before and after rescaling  
+- Bisection algorithm convergence information
+- Annual summary files via `WriteAnnCapResultFile()`

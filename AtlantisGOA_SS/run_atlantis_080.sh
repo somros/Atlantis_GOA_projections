@@ -1,0 +1,1 @@
+atlantisMerged -i GOA_cb_summer.nc  0 -o outputGOA_080.nc -r GOA_run.prm -f GOA_force.prm -p GOA_physics.prm -b GOAbioparam.prm -h GOA_harvest_080.prm -m GOAMigrations.csv -s GOA_Groups.csv -q GOA_fisheries.csv -d outputFolder080

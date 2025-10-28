@@ -1,0 +1,447 @@
+# PC Version (created by Beth Fulton and Adam Davidson)
+#
+#-----------
+#  Update from v 6520 to 6599, Isaac Dec 20 2021
+use_pollutantfiles 0   
+
+use_move_enties 0  # use forced spatial distributions imported as NC files. See bottom of this file. 
+
+#------
+# Hydrodynamic files - this is for NEP 10 km 2017
+# input directories  
+
+ts_on_hydro_time 0
+
+nhdfiles 110
+hd0.name forcings/hydro/goa_hydro_1999.nc
+hd1.name forcings/hydro/goa_hydro_1999.nc
+hd2.name forcings/hydro/goa_hydro_1999.nc
+hd3.name forcings/hydro/goa_hydro_1999.nc
+hd4.name forcings/hydro/goa_hydro_1999.nc
+hd5.name forcings/hydro/goa_hydro_1999.nc
+hd6.name forcings/hydro/goa_hydro_1999.nc
+hd7.name forcings/hydro/goa_hydro_1999.nc
+hd8.name forcings/hydro/goa_hydro_1999.nc
+hd9.name forcings/hydro/goa_hydro_1999.nc
+hd10.name forcings/hydro/goa_hydro_1999.nc
+hd11.name forcings/hydro/goa_hydro_1999.nc
+hd12.name forcings/hydro/goa_hydro_1999.nc
+hd13.name forcings/hydro/goa_hydro_1999.nc
+hd14.name forcings/hydro/goa_hydro_1999.nc
+hd15.name forcings/hydro/goa_hydro_1999.nc
+hd16.name forcings/hydro/goa_hydro_1999.nc
+hd17.name forcings/hydro/goa_hydro_1999.nc
+hd18.name forcings/hydro/goa_hydro_1999.nc
+hd19.name forcings/hydro/goa_hydro_1999.nc
+hd20.name forcings/hydro/goa_hydro_1999.nc
+hd21.name forcings/hydro/goa_hydro_1999.nc
+hd22.name forcings/hydro/goa_hydro_1999.nc
+hd23.name forcings/hydro/goa_hydro_1999.nc
+hd24.name forcings/hydro/goa_hydro_1999.nc
+hd25.name forcings/hydro/goa_hydro_1999.nc
+hd26.name forcings/hydro/goa_hydro_1999.nc
+hd27.name forcings/hydro/goa_hydro_1999.nc
+hd28.name forcings/hydro/goa_hydro_1999.nc
+hd29.name forcings/hydro/goa_hydro_1999.nc
+hd30.name forcings_proj/ssp245/hydro/goa_hydro_2020.nc
+hd31.name forcings_proj/ssp245/hydro/goa_hydro_2021.nc
+hd32.name forcings_proj/ssp245/hydro/goa_hydro_2022.nc
+hd33.name forcings_proj/ssp245/hydro/goa_hydro_2023.nc
+hd34.name forcings_proj/ssp245/hydro/goa_hydro_2024.nc
+hd35.name forcings_proj/ssp245/hydro/goa_hydro_2025.nc
+hd36.name forcings_proj/ssp245/hydro/goa_hydro_2026.nc
+hd37.name forcings_proj/ssp245/hydro/goa_hydro_2027.nc
+hd38.name forcings_proj/ssp245/hydro/goa_hydro_2028.nc
+hd39.name forcings_proj/ssp245/hydro/goa_hydro_2029.nc
+hd40.name forcings_proj/ssp245/hydro/goa_hydro_2030.nc
+hd41.name forcings_proj/ssp245/hydro/goa_hydro_2031.nc
+hd42.name forcings_proj/ssp245/hydro/goa_hydro_2032.nc
+hd43.name forcings_proj/ssp245/hydro/goa_hydro_2033.nc
+hd44.name forcings_proj/ssp245/hydro/goa_hydro_2034.nc
+hd45.name forcings_proj/ssp245/hydro/goa_hydro_2035.nc
+hd46.name forcings_proj/ssp245/hydro/goa_hydro_2036.nc
+hd47.name forcings_proj/ssp245/hydro/goa_hydro_2037.nc
+hd48.name forcings_proj/ssp245/hydro/goa_hydro_2038.nc
+hd49.name forcings_proj/ssp245/hydro/goa_hydro_2039.nc
+hd50.name forcings_proj/ssp245/hydro/goa_hydro_2040.nc
+hd51.name forcings_proj/ssp245/hydro/goa_hydro_2041.nc
+hd52.name forcings_proj/ssp245/hydro/goa_hydro_2042.nc
+hd53.name forcings_proj/ssp245/hydro/goa_hydro_2043.nc
+hd54.name forcings_proj/ssp245/hydro/goa_hydro_2044.nc
+hd55.name forcings_proj/ssp245/hydro/goa_hydro_2045.nc
+hd56.name forcings_proj/ssp245/hydro/goa_hydro_2046.nc
+hd57.name forcings_proj/ssp245/hydro/goa_hydro_2047.nc
+hd58.name forcings_proj/ssp245/hydro/goa_hydro_2048.nc
+hd59.name forcings_proj/ssp245/hydro/goa_hydro_2049.nc
+hd60.name forcings_proj/ssp245/hydro/goa_hydro_2050.nc
+hd61.name forcings_proj/ssp245/hydro/goa_hydro_2051.nc
+hd62.name forcings_proj/ssp245/hydro/goa_hydro_2052.nc
+hd63.name forcings_proj/ssp245/hydro/goa_hydro_2053.nc
+hd64.name forcings_proj/ssp245/hydro/goa_hydro_2054.nc
+hd65.name forcings_proj/ssp245/hydro/goa_hydro_2055.nc
+hd66.name forcings_proj/ssp245/hydro/goa_hydro_2056.nc
+hd67.name forcings_proj/ssp245/hydro/goa_hydro_2057.nc
+hd68.name forcings_proj/ssp245/hydro/goa_hydro_2058.nc
+hd69.name forcings_proj/ssp245/hydro/goa_hydro_2059.nc
+hd70.name forcings_proj/ssp245/hydro/goa_hydro_2060.nc
+hd71.name forcings_proj/ssp245/hydro/goa_hydro_2061.nc
+hd72.name forcings_proj/ssp245/hydro/goa_hydro_2062.nc
+hd73.name forcings_proj/ssp245/hydro/goa_hydro_2063.nc
+hd74.name forcings_proj/ssp245/hydro/goa_hydro_2064.nc
+hd75.name forcings_proj/ssp245/hydro/goa_hydro_2065.nc
+hd76.name forcings_proj/ssp245/hydro/goa_hydro_2066.nc
+hd77.name forcings_proj/ssp245/hydro/goa_hydro_2067.nc
+hd78.name forcings_proj/ssp245/hydro/goa_hydro_2068.nc
+hd79.name forcings_proj/ssp245/hydro/goa_hydro_2069.nc
+hd80.name forcings_proj/ssp245/hydro/goa_hydro_2070.nc
+hd81.name forcings_proj/ssp245/hydro/goa_hydro_2071.nc
+hd82.name forcings_proj/ssp245/hydro/goa_hydro_2072.nc
+hd83.name forcings_proj/ssp245/hydro/goa_hydro_2073.nc
+hd84.name forcings_proj/ssp245/hydro/goa_hydro_2074.nc
+hd85.name forcings_proj/ssp245/hydro/goa_hydro_2075.nc
+hd86.name forcings_proj/ssp245/hydro/goa_hydro_2076.nc
+hd87.name forcings_proj/ssp245/hydro/goa_hydro_2077.nc
+hd88.name forcings_proj/ssp245/hydro/goa_hydro_2078.nc
+hd89.name forcings_proj/ssp245/hydro/goa_hydro_2079.nc
+hd90.name forcings_proj/ssp245/hydro/goa_hydro_2080.nc
+hd91.name forcings_proj/ssp245/hydro/goa_hydro_2081.nc
+hd92.name forcings_proj/ssp245/hydro/goa_hydro_2082.nc
+hd93.name forcings_proj/ssp245/hydro/goa_hydro_2083.nc
+hd94.name forcings_proj/ssp245/hydro/goa_hydro_2084.nc
+hd95.name forcings_proj/ssp245/hydro/goa_hydro_2085.nc
+hd96.name forcings_proj/ssp245/hydro/goa_hydro_2086.nc
+hd97.name forcings_proj/ssp245/hydro/goa_hydro_2087.nc
+hd98.name forcings_proj/ssp245/hydro/goa_hydro_2088.nc
+hd99.name forcings_proj/ssp245/hydro/goa_hydro_2089.nc
+hd100.name forcings_proj/ssp245/hydro/goa_hydro_2090.nc
+hd101.name forcings_proj/ssp245/hydro/goa_hydro_2091.nc
+hd102.name forcings_proj/ssp245/hydro/goa_hydro_2092.nc
+hd103.name forcings_proj/ssp245/hydro/goa_hydro_2093.nc
+hd104.name forcings_proj/ssp245/hydro/goa_hydro_2094.nc
+hd105.name forcings_proj/ssp245/hydro/goa_hydro_2095.nc
+hd106.name forcings_proj/ssp245/hydro/goa_hydro_2096.nc
+hd107.name forcings_proj/ssp245/hydro/goa_hydro_2097.nc
+hd108.name forcings_proj/ssp245/hydro/goa_hydro_2098.nc
+hd109.name forcings_proj/ssp245/hydro/goa_hydro_2099.nc
+
+
+# Bottom stress 2/18/2022 GOA not using any of this
+
+#############################################
+# Point source/sink lists
+npointss 0
+
+##########################################
+# Rain and evaporation 2/18/2022 GOA not using any of this
+
+# Solar time series data file
+Solar_radiation solar_goa_2017.ts
+Solar_radiation_rewind 1
+
+# Temperature time series data file
+use_tempfiles 1
+# The number of temperature input files 
+ntempfiles 110
+Temperature0.name forcings/temp/mean_1990s_temperature.nc
+Temperature1.name forcings/temp/mean_1990s_temperature.nc
+Temperature2.name forcings/temp/mean_1990s_temperature.nc
+Temperature3.name forcings/temp/mean_1990s_temperature.nc
+Temperature4.name forcings/temp/mean_1990s_temperature.nc
+Temperature5.name forcings/temp/mean_1990s_temperature.nc
+Temperature6.name forcings/temp/mean_1990s_temperature.nc
+Temperature7.name forcings/temp/mean_1990s_temperature.nc
+Temperature8.name forcings/temp/mean_1990s_temperature.nc
+Temperature9.name forcings/temp/mean_1990s_temperature.nc
+Temperature10.name forcings/temp/mean_1990s_temperature.nc
+Temperature11.name forcings/temp/mean_1990s_temperature.nc
+Temperature12.name forcings/temp/mean_1990s_temperature.nc
+Temperature13.name forcings/temp/mean_1990s_temperature.nc
+Temperature14.name forcings/temp/mean_1990s_temperature.nc
+Temperature15.name forcings/temp/mean_1990s_temperature.nc
+Temperature16.name forcings/temp/mean_1990s_temperature.nc
+Temperature17.name forcings/temp/mean_1990s_temperature.nc
+Temperature18.name forcings/temp/mean_1990s_temperature.nc
+Temperature19.name forcings/temp/mean_1990s_temperature.nc
+Temperature20.name forcings/temp/mean_1990s_temperature.nc
+Temperature21.name forcings/temp/mean_1990s_temperature.nc
+Temperature22.name forcings/temp/mean_1990s_temperature.nc
+Temperature23.name forcings/temp/mean_1990s_temperature.nc
+Temperature24.name forcings/temp/mean_1990s_temperature.nc
+Temperature25.name forcings/temp/mean_1990s_temperature.nc
+Temperature26.name forcings/temp/mean_1990s_temperature.nc
+Temperature27.name forcings/temp/mean_1990s_temperature.nc
+Temperature28.name forcings/temp/mean_1990s_temperature.nc
+Temperature29.name forcings/temp/mean_1990s_temperature.nc
+Temperature30.name forcings_proj/ssp245/temp/goa_roms_temp_2020.nc
+Temperature31.name forcings_proj/ssp245/temp/goa_roms_temp_2021.nc
+Temperature32.name forcings_proj/ssp245/temp/goa_roms_temp_2022.nc
+Temperature33.name forcings_proj/ssp245/temp/goa_roms_temp_2023.nc
+Temperature34.name forcings_proj/ssp245/temp/goa_roms_temp_2024.nc
+Temperature35.name forcings_proj/ssp245/temp/goa_roms_temp_2025.nc
+Temperature36.name forcings_proj/ssp245/temp/goa_roms_temp_2026.nc
+Temperature37.name forcings_proj/ssp245/temp/goa_roms_temp_2027.nc
+Temperature38.name forcings_proj/ssp245/temp/goa_roms_temp_2028.nc
+Temperature39.name forcings_proj/ssp245/temp/goa_roms_temp_2029.nc
+Temperature40.name forcings_proj/ssp245/temp/goa_roms_temp_2030.nc
+Temperature41.name forcings_proj/ssp245/temp/goa_roms_temp_2031.nc
+Temperature42.name forcings_proj/ssp245/temp/goa_roms_temp_2032.nc
+Temperature43.name forcings_proj/ssp245/temp/goa_roms_temp_2033.nc
+Temperature44.name forcings_proj/ssp245/temp/goa_roms_temp_2034.nc
+Temperature45.name forcings_proj/ssp245/temp/goa_roms_temp_2035.nc
+Temperature46.name forcings_proj/ssp245/temp/goa_roms_temp_2036.nc
+Temperature47.name forcings_proj/ssp245/temp/goa_roms_temp_2037.nc
+Temperature48.name forcings_proj/ssp245/temp/goa_roms_temp_2038.nc
+Temperature49.name forcings_proj/ssp245/temp/goa_roms_temp_2039.nc
+Temperature50.name forcings_proj/ssp245/temp/goa_roms_temp_2040.nc
+Temperature51.name forcings_proj/ssp245/temp/goa_roms_temp_2041.nc
+Temperature52.name forcings_proj/ssp245/temp/goa_roms_temp_2042.nc
+Temperature53.name forcings_proj/ssp245/temp/goa_roms_temp_2043.nc
+Temperature54.name forcings_proj/ssp245/temp/goa_roms_temp_2044.nc
+Temperature55.name forcings_proj/ssp245/temp/goa_roms_temp_2045.nc
+Temperature56.name forcings_proj/ssp245/temp/goa_roms_temp_2046.nc
+Temperature57.name forcings_proj/ssp245/temp/goa_roms_temp_2047.nc
+Temperature58.name forcings_proj/ssp245/temp/goa_roms_temp_2048.nc
+Temperature59.name forcings_proj/ssp245/temp/goa_roms_temp_2049.nc
+Temperature60.name forcings_proj/ssp245/temp/goa_roms_temp_2050.nc
+Temperature61.name forcings_proj/ssp245/temp/goa_roms_temp_2051.nc
+Temperature62.name forcings_proj/ssp245/temp/goa_roms_temp_2052.nc
+Temperature63.name forcings_proj/ssp245/temp/goa_roms_temp_2053.nc
+Temperature64.name forcings_proj/ssp245/temp/goa_roms_temp_2054.nc
+Temperature65.name forcings_proj/ssp245/temp/goa_roms_temp_2055.nc
+Temperature66.name forcings_proj/ssp245/temp/goa_roms_temp_2056.nc
+Temperature67.name forcings_proj/ssp245/temp/goa_roms_temp_2057.nc
+Temperature68.name forcings_proj/ssp245/temp/goa_roms_temp_2058.nc
+Temperature69.name forcings_proj/ssp245/temp/goa_roms_temp_2059.nc
+Temperature70.name forcings_proj/ssp245/temp/goa_roms_temp_2060.nc
+Temperature71.name forcings_proj/ssp245/temp/goa_roms_temp_2061.nc
+Temperature72.name forcings_proj/ssp245/temp/goa_roms_temp_2062.nc
+Temperature73.name forcings_proj/ssp245/temp/goa_roms_temp_2063.nc
+Temperature74.name forcings_proj/ssp245/temp/goa_roms_temp_2064.nc
+Temperature75.name forcings_proj/ssp245/temp/goa_roms_temp_2065.nc
+Temperature76.name forcings_proj/ssp245/temp/goa_roms_temp_2066.nc
+Temperature77.name forcings_proj/ssp245/temp/goa_roms_temp_2067.nc
+Temperature78.name forcings_proj/ssp245/temp/goa_roms_temp_2068.nc
+Temperature79.name forcings_proj/ssp245/temp/goa_roms_temp_2069.nc
+Temperature80.name forcings_proj/ssp245/temp/goa_roms_temp_2070.nc
+Temperature81.name forcings_proj/ssp245/temp/goa_roms_temp_2071.nc
+Temperature82.name forcings_proj/ssp245/temp/goa_roms_temp_2072.nc
+Temperature83.name forcings_proj/ssp245/temp/goa_roms_temp_2073.nc
+Temperature84.name forcings_proj/ssp245/temp/goa_roms_temp_2074.nc
+Temperature85.name forcings_proj/ssp245/temp/goa_roms_temp_2075.nc
+Temperature86.name forcings_proj/ssp245/temp/goa_roms_temp_2076.nc
+Temperature87.name forcings_proj/ssp245/temp/goa_roms_temp_2077.nc
+Temperature88.name forcings_proj/ssp245/temp/goa_roms_temp_2078.nc
+Temperature89.name forcings_proj/ssp245/temp/goa_roms_temp_2079.nc
+Temperature90.name forcings_proj/ssp245/temp/goa_roms_temp_2080.nc
+Temperature91.name forcings_proj/ssp245/temp/goa_roms_temp_2081.nc
+Temperature92.name forcings_proj/ssp245/temp/goa_roms_temp_2082.nc
+Temperature93.name forcings_proj/ssp245/temp/goa_roms_temp_2083.nc
+Temperature94.name forcings_proj/ssp245/temp/goa_roms_temp_2084.nc
+Temperature95.name forcings_proj/ssp245/temp/goa_roms_temp_2085.nc
+Temperature96.name forcings_proj/ssp245/temp/goa_roms_temp_2086.nc
+Temperature97.name forcings_proj/ssp245/temp/goa_roms_temp_2087.nc
+Temperature98.name forcings_proj/ssp245/temp/goa_roms_temp_2088.nc
+Temperature99.name forcings_proj/ssp245/temp/goa_roms_temp_2089.nc
+Temperature100.name forcings_proj/ssp245/temp/goa_roms_temp_2090.nc
+Temperature101.name forcings_proj/ssp245/temp/goa_roms_temp_2091.nc
+Temperature102.name forcings_proj/ssp245/temp/goa_roms_temp_2092.nc
+Temperature103.name forcings_proj/ssp245/temp/goa_roms_temp_2093.nc
+Temperature104.name forcings_proj/ssp245/temp/goa_roms_temp_2094.nc
+Temperature105.name forcings_proj/ssp245/temp/goa_roms_temp_2095.nc
+Temperature106.name forcings_proj/ssp245/temp/goa_roms_temp_2096.nc
+Temperature107.name forcings_proj/ssp245/temp/goa_roms_temp_2097.nc
+Temperature108.name forcings_proj/ssp245/temp/goa_roms_temp_2098.nc
+Temperature109.name forcings_proj/ssp245/temp/goa_roms_temp_2099.nc
+
+temp_rewind 1
+
+
+
+# Salinity time series data file
+use_saltfiles 1
+# The number of salinity files 
+nsaltfiles 110
+Salinity0.name forcings/salt/mean_1990s_salinity.nc
+Salinity1.name forcings/salt/mean_1990s_salinity.nc
+Salinity2.name forcings/salt/mean_1990s_salinity.nc
+Salinity3.name forcings/salt/mean_1990s_salinity.nc
+Salinity4.name forcings/salt/mean_1990s_salinity.nc
+Salinity5.name forcings/salt/mean_1990s_salinity.nc
+Salinity6.name forcings/salt/mean_1990s_salinity.nc
+Salinity7.name forcings/salt/mean_1990s_salinity.nc
+Salinity8.name forcings/salt/mean_1990s_salinity.nc
+Salinity9.name forcings/salt/mean_1990s_salinity.nc
+Salinity10.name forcings/salt/mean_1990s_salinity.nc
+Salinity11.name forcings/salt/mean_1990s_salinity.nc
+Salinity12.name forcings/salt/mean_1990s_salinity.nc
+Salinity13.name forcings/salt/mean_1990s_salinity.nc
+Salinity14.name forcings/salt/mean_1990s_salinity.nc
+Salinity15.name forcings/salt/mean_1990s_salinity.nc
+Salinity16.name forcings/salt/mean_1990s_salinity.nc
+Salinity17.name forcings/salt/mean_1990s_salinity.nc
+Salinity18.name forcings/salt/mean_1990s_salinity.nc
+Salinity19.name forcings/salt/mean_1990s_salinity.nc
+Salinity20.name forcings/salt/mean_1990s_salinity.nc
+Salinity21.name forcings/salt/mean_1990s_salinity.nc
+Salinity22.name forcings/salt/mean_1990s_salinity.nc
+Salinity23.name forcings/salt/mean_1990s_salinity.nc
+Salinity24.name forcings/salt/mean_1990s_salinity.nc
+Salinity25.name forcings/salt/mean_1990s_salinity.nc
+Salinity26.name forcings/salt/mean_1990s_salinity.nc
+Salinity27.name forcings/salt/mean_1990s_salinity.nc
+Salinity28.name forcings/salt/mean_1990s_salinity.nc
+Salinity29.name forcings/salt/mean_1990s_salinity.nc
+Salinity30.name forcings_proj/ssp245/salt/goa_roms_salt_2020.nc
+Salinity31.name forcings_proj/ssp245/salt/goa_roms_salt_2021.nc
+Salinity32.name forcings_proj/ssp245/salt/goa_roms_salt_2022.nc
+Salinity33.name forcings_proj/ssp245/salt/goa_roms_salt_2023.nc
+Salinity34.name forcings_proj/ssp245/salt/goa_roms_salt_2024.nc
+Salinity35.name forcings_proj/ssp245/salt/goa_roms_salt_2025.nc
+Salinity36.name forcings_proj/ssp245/salt/goa_roms_salt_2026.nc
+Salinity37.name forcings_proj/ssp245/salt/goa_roms_salt_2027.nc
+Salinity38.name forcings_proj/ssp245/salt/goa_roms_salt_2028.nc
+Salinity39.name forcings_proj/ssp245/salt/goa_roms_salt_2029.nc
+Salinity40.name forcings_proj/ssp245/salt/goa_roms_salt_2030.nc
+Salinity41.name forcings_proj/ssp245/salt/goa_roms_salt_2031.nc
+Salinity42.name forcings_proj/ssp245/salt/goa_roms_salt_2032.nc
+Salinity43.name forcings_proj/ssp245/salt/goa_roms_salt_2033.nc
+Salinity44.name forcings_proj/ssp245/salt/goa_roms_salt_2034.nc
+Salinity45.name forcings_proj/ssp245/salt/goa_roms_salt_2035.nc
+Salinity46.name forcings_proj/ssp245/salt/goa_roms_salt_2036.nc
+Salinity47.name forcings_proj/ssp245/salt/goa_roms_salt_2037.nc
+Salinity48.name forcings_proj/ssp245/salt/goa_roms_salt_2038.nc
+Salinity49.name forcings_proj/ssp245/salt/goa_roms_salt_2039.nc
+Salinity50.name forcings_proj/ssp245/salt/goa_roms_salt_2040.nc
+Salinity51.name forcings_proj/ssp245/salt/goa_roms_salt_2041.nc
+Salinity52.name forcings_proj/ssp245/salt/goa_roms_salt_2042.nc
+Salinity53.name forcings_proj/ssp245/salt/goa_roms_salt_2043.nc
+Salinity54.name forcings_proj/ssp245/salt/goa_roms_salt_2044.nc
+Salinity55.name forcings_proj/ssp245/salt/goa_roms_salt_2045.nc
+Salinity56.name forcings_proj/ssp245/salt/goa_roms_salt_2046.nc
+Salinity57.name forcings_proj/ssp245/salt/goa_roms_salt_2047.nc
+Salinity58.name forcings_proj/ssp245/salt/goa_roms_salt_2048.nc
+Salinity59.name forcings_proj/ssp245/salt/goa_roms_salt_2049.nc
+Salinity60.name forcings_proj/ssp245/salt/goa_roms_salt_2050.nc
+Salinity61.name forcings_proj/ssp245/salt/goa_roms_salt_2051.nc
+Salinity62.name forcings_proj/ssp245/salt/goa_roms_salt_2052.nc
+Salinity63.name forcings_proj/ssp245/salt/goa_roms_salt_2053.nc
+Salinity64.name forcings_proj/ssp245/salt/goa_roms_salt_2054.nc
+Salinity65.name forcings_proj/ssp245/salt/goa_roms_salt_2055.nc
+Salinity66.name forcings_proj/ssp245/salt/goa_roms_salt_2056.nc
+Salinity67.name forcings_proj/ssp245/salt/goa_roms_salt_2057.nc
+Salinity68.name forcings_proj/ssp245/salt/goa_roms_salt_2058.nc
+Salinity69.name forcings_proj/ssp245/salt/goa_roms_salt_2059.nc
+Salinity70.name forcings_proj/ssp245/salt/goa_roms_salt_2060.nc
+Salinity71.name forcings_proj/ssp245/salt/goa_roms_salt_2061.nc
+Salinity72.name forcings_proj/ssp245/salt/goa_roms_salt_2062.nc
+Salinity73.name forcings_proj/ssp245/salt/goa_roms_salt_2063.nc
+Salinity74.name forcings_proj/ssp245/salt/goa_roms_salt_2064.nc
+Salinity75.name forcings_proj/ssp245/salt/goa_roms_salt_2065.nc
+Salinity76.name forcings_proj/ssp245/salt/goa_roms_salt_2066.nc
+Salinity77.name forcings_proj/ssp245/salt/goa_roms_salt_2067.nc
+Salinity78.name forcings_proj/ssp245/salt/goa_roms_salt_2068.nc
+Salinity79.name forcings_proj/ssp245/salt/goa_roms_salt_2069.nc
+Salinity80.name forcings_proj/ssp245/salt/goa_roms_salt_2070.nc
+Salinity81.name forcings_proj/ssp245/salt/goa_roms_salt_2071.nc
+Salinity82.name forcings_proj/ssp245/salt/goa_roms_salt_2072.nc
+Salinity83.name forcings_proj/ssp245/salt/goa_roms_salt_2073.nc
+Salinity84.name forcings_proj/ssp245/salt/goa_roms_salt_2074.nc
+Salinity85.name forcings_proj/ssp245/salt/goa_roms_salt_2075.nc
+Salinity86.name forcings_proj/ssp245/salt/goa_roms_salt_2076.nc
+Salinity87.name forcings_proj/ssp245/salt/goa_roms_salt_2077.nc
+Salinity88.name forcings_proj/ssp245/salt/goa_roms_salt_2078.nc
+Salinity89.name forcings_proj/ssp245/salt/goa_roms_salt_2079.nc
+Salinity90.name forcings_proj/ssp245/salt/goa_roms_salt_2080.nc
+Salinity91.name forcings_proj/ssp245/salt/goa_roms_salt_2081.nc
+Salinity92.name forcings_proj/ssp245/salt/goa_roms_salt_2082.nc
+Salinity93.name forcings_proj/ssp245/salt/goa_roms_salt_2083.nc
+Salinity94.name forcings_proj/ssp245/salt/goa_roms_salt_2084.nc
+Salinity95.name forcings_proj/ssp245/salt/goa_roms_salt_2085.nc
+Salinity96.name forcings_proj/ssp245/salt/goa_roms_salt_2086.nc
+Salinity97.name forcings_proj/ssp245/salt/goa_roms_salt_2087.nc
+Salinity98.name forcings_proj/ssp245/salt/goa_roms_salt_2088.nc
+Salinity99.name forcings_proj/ssp245/salt/goa_roms_salt_2089.nc
+Salinity100.name forcings_proj/ssp245/salt/goa_roms_salt_2090.nc
+Salinity101.name forcings_proj/ssp245/salt/goa_roms_salt_2091.nc
+Salinity102.name forcings_proj/ssp245/salt/goa_roms_salt_2092.nc
+Salinity103.name forcings_proj/ssp245/salt/goa_roms_salt_2093.nc
+Salinity104.name forcings_proj/ssp245/salt/goa_roms_salt_2094.nc
+Salinity105.name forcings_proj/ssp245/salt/goa_roms_salt_2095.nc
+Salinity106.name forcings_proj/ssp245/salt/goa_roms_salt_2096.nc
+Salinity107.name forcings_proj/ssp245/salt/goa_roms_salt_2097.nc
+Salinity108.name forcings_proj/ssp245/salt/goa_roms_salt_2098.nc
+Salinity109.name forcings_proj/ssp245/salt/goa_roms_salt_2099.nc
+
+salt_rewind 1
+
+
+# Recruitment_time_series
+
+# Recruitment_enviro_forcing
+# Recruitment_enviro_forcing CEATTLE_test_POL.ts
+
+
+# pH files
+use_phFiles 0
+npHfiles 0
+
+
+
+#############################################
+# Historical catch lists - nCatchts is the number of time series to be loaded and
+# typeCatchts is whether or not the data is to be interpolated (0) by the model
+# or just use previous record (1)
+nCatchts 0
+typeCatchts 0
+
+#############################################
+# Historical discard lists
+nDiscardts 0
+typeDiscardts 0
+
+#############################################
+# Residual lists - on market fish prices
+nResidualsts 0
+typeResidualsts 0
+
+#############################################
+# Economic statistics - GDP and fuel costs
+nEconts 0
+typeEconts 0
+
+##############################################
+# MPA (spatial management) files for cases where change through time
+# Same format as Catchts above
+nMPAts 0
+typeMPAts 0
+
+# Frequency of inputs.ts and exports.ts output.
+inputs_tout 1 day
+
+use_VertMixFiles 0
+
+##################################################
+### Forced Species Distributions that vary over years (as .NC inputs)
+# See Atlantis User Manual page 85. "Forcing species distributions"
+
+# At top of this file, we have set "use_move_entries 1""  # use forced spatial distributions imported as NC files. See bottom of this file. 
+
+
+nforceMoveGroups 0
+MoveGroupCodes 0
+
+
+#Also list the distribution nc files - 1 file per "MoveGroupCode"
+#
+
+##########################
+# https://confluence.csiro.au/display/Atlantis/2013/07/10/Read+in+forcing+data+for+tracers
+
+use_external_scaling 1
+
+scale_all_mortality 0
+mortality_addition 0
+
+externalBiologyForcingFile scalar_proj_ROMS_ssp245_110yr.nc
+
+externalBiologyForcingFile_rewind 0

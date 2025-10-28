@@ -104,7 +104,7 @@ dat_1990s <- rbind(dat_1990s,
 dat_1990s <- dat_1990s %>% filter(!is.nan(`F`))
 
 # read recent harvest.prm
-harvest_file <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2097/GOA_harvest_background.prm"
+harvest_file <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2281/GOA_harvest_background.prm"
 harvest <- readLines(harvest_file)
 
 # get mFC values
@@ -131,7 +131,7 @@ dat_1990s %>%
 # there are some differences here and we should test this ASAP - may take some calibration
 # POL and COD can take it based on the HCR? POL is fished at FMSY and barely goes below B40
 # worried that SBF will collapse and ATF will boom
-# neat that ATF will be even more inconsequential for BC caluculations
+# neat that ATF will be even more inconsequential for BC calculations
 
 # while we are at it and doing a run, let's do another with 2010s values
 dat_2010s <- dat_final %>%
@@ -167,7 +167,8 @@ dat_2010s %>%
 # this will be used for the base model and for the burn-in in the projection runs
 
 # need to get a recent mFC for all the values that are NOT being changed to 1990s
-oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Atlantis_GOA_OY_MS/GOA_harvest_background.prm"
+#oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Atlantis_GOA_OY_MS/GOA_harvest_background.prm"
+oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2303/GOA_harvest_background.prm"
 ref_harvest <- readLines(oldfile)
 
 # get harvest parameters outside loop
@@ -181,7 +182,7 @@ for(sp in codes) {
 }
 
 if(!dir.exists("mFC_tuning/")){dir.create("mFC_tuning/")}
-newfile <- paste0('mFC_tuning/mfc_1990s_BEFORE_TUNING.prm')
+newfile <- paste0('mFC_tuning/mfc_1990s_BEFORE_TUNING_FINAL.prm')
 file.create(newfile)
 
 for(i in 1:length(codes)){
@@ -210,7 +211,7 @@ for(i in 1:length(codes)){
 # this will also have to be tuned with the one-yr runs
 # this will be used for the projection runs
 dat_recent <- dat_final %>%
-  filter(Year %in% c(2016:2020)) %>%
+  filter(Year %in% c(2015:2019)) %>%
   group_by(Code) %>%
   summarise(`F` = mean(`F`, na.rm = T))
 
@@ -249,6 +250,6 @@ for(i in 1:length(codes)){
 }
 
 # sanity check
-# dat_1990s %>%
-#   left_join(dat_recent, by = "Code") %>%
-#   mutate(prop = F.y / F.x)
+dat_1990s %>%
+  left_join(dat_recent, by = "Code") %>%
+  mutate(prop = F.y / F.x)

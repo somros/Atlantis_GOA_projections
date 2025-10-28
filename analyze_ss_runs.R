@@ -229,7 +229,7 @@ fmsy_ss <- ss_df %>%
   filter(Code %in% fmsy_grp) %>%
   group_by(Code) %>%
   slice_max(catch_mt) %>%
-  select(Code, f, targ_f) %>%
+  select(Code, f, targ_f, run) %>%
   rename(fmsy_realized = f,
          fmsy_input = targ_f)
 
@@ -301,11 +301,17 @@ ggsave(here("plots", "combined_plots_oct2025.png"), combined_plot, width = 7, he
 # Write output ------------------------------------------------------------
 
 # produce an output table for b0 and fmsy, which will be used to build the HCR parameters for the ms projections
+# NOTE: fref as used in Atlantis is an exploitation rate
+# It will have to be the input exploitation rate corresponding to FMSY
+# It should be equivalent to mfc*365 for that run
+# b0 is in SSB so should be able to use it as-is, if we use the SSB switch for the HCR
+
 out_tab <- b0_df %>%
-  left_join(fmsy_ss, by = "Code")
+  left_join(fmsy_ss, by = "Code") %>%
+  mutate(fref = 1 - exp(-fmsy_input),
+         fref_mfc_for_check = 1 - exp(-fmsy_input/365)) # these track
 
 write.csv(out_tab, "output/ref_points_from_SS_runs_oct2025.csv")
-
 
 # Diagnostics -------------------------------------------------------------
 

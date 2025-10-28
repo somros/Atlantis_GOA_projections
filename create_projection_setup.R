@@ -250,6 +250,9 @@ for (i in 1:length(oy_grp_and_hal)){
   # done
 }
 
+# fix the mEff lines
+harvest_base <- gsub("0.25 0.25 0.25 0.25", "0 0 0 0", harvest_base, fixed = T)
+
 # write out
 writeLines(harvest_base, "AtlantisGOA_MS/GOA_harvest_template.prm")
 
@@ -307,9 +310,6 @@ for(i in 1:nrow(cap_df)){
   SystCapSPpref_line <- grep("SystCapSPpref 78", this_harvest)
   this_harvest[SystCapSPpref_line + 1] <- w_vec
   
-  syst_cap_calc_method_line <- grep("syst_cap_calc_method", this_harvest)
-  this_harvest[syst_cap_calc_method_line] <- gsub("syst_cap_calc_method 1", "syst_cap_calc_method 0", this_harvest[syst_cap_calc_method_line])
-  
   Ecosystm_Cap_tonnes_line <- grep("Ecosystm_Cap_tonnes", this_harvest)
   this_harvest[Ecosystm_Cap_tonnes_line] <- paste("Ecosystm_Cap_tonnes", cap)
   
@@ -354,7 +354,7 @@ for(i in 1:length(scenarios)){
     if(j <= burnin_t){
       string <- paste0("hd", j-1, ".name forcings/hydro/goa_hydro_1999.nc")
     } else {
-      string <- paste0("hd", j-1, ".name ../forcings_proj/ssp", clim, "/hydro/goa_hydro_", yr, ".nc")
+      string <- paste0("hd", j-1, ".name forcings_proj/ssp", clim, "/hydro/goa_hydro_", yr, ".nc")
       yr <- yr + 1
     }
     h_section <- c(h_section, string)

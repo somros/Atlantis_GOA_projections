@@ -1,0 +1,12 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+
+Name: something
+Description: Some library.
+Requires: libsjwlib
+Version: 2.0.0
+Libs: -L${libdir} -lAtlantis-3.0/
+Cflags: -I${includedir}/Atlantis-3.0/Atlantis -I${libdir}/Atlantis-3.0/include -D ATLANTIS3

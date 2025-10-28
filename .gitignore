@@ -4,6 +4,13 @@
 *.Rdata
 AtlantisGOAV0_02212/
 AtlantisGOAV0_02238/
-
+AtlantisGOAV0_02241/
+AtlantisGOAV0_02303/
+AtlantisGOAV0_02306/
+AtlantisGOA_MS_OLD/
+AtlantisGOA_SS_OLD/
+AtlantisGOA_MS/forcings_proj/
+output/
+plots/
 
 data/Groundfish Total Catch.csv

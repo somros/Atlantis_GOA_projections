@@ -1,0 +1,120 @@
+# PC Version (created by Beth Fulton and Adam Davidson)
+#
+#-----------
+#  Update from v 6520 to 6599, Isaac Dec 20 2021
+use_pollutantfiles 0   
+
+use_move_enties 0  # use forced spatial distributions imported as NC files. See bottom of this file. 
+
+#------
+# Hydrodynamic files - this is for NEP 10 km 2017
+# input directories  
+
+ts_on_hydro_time 0
+
+nhdfiles 1
+hd0.name forcings/hydro/goa_hydro_1999.nc
+
+
+# Bottom stress 2/18/2022 GOA not using any of this
+
+#############################################
+# Point source/sink lists
+npointss 0
+
+##########################################
+# Rain and evaporation 2/18/2022 GOA not using any of this
+
+# Solar time series data file
+Solar_radiation solar_goa_2017.ts
+Solar_radiation_rewind 1
+
+# Temperature time series data file
+use_tempfiles 1
+# The number of temperature input files 
+ntempfiles 1
+Temperature0.name forcings/temp/mean_1990s_temperature.nc
+
+temp_rewind 1
+
+
+
+# Salinity time series data file
+use_saltfiles 1
+# The number of salinity files 
+nsaltfiles 1 
+Salinity0.name forcings/salt/mean_1990s_salinity.nc
+
+salt_rewind 1
+
+
+# Recruitment_time_series
+
+# Recruitment_enviro_forcing
+# Recruitment_enviro_forcing CEATTLE_test_POL.ts
+
+
+# pH files
+use_phFiles 0
+npHfiles 0
+
+
+
+#############################################
+# Historical catch lists - nCatchts is the number of time series to be loaded and
+# typeCatchts is whether or not the data is to be interpolated (0) by the model
+# or just use previous record (1)
+nCatchts 0
+typeCatchts 0
+
+#############################################
+# Historical discard lists
+nDiscardts 0
+typeDiscardts 0
+
+#############################################
+# Residual lists - on market fish prices
+nResidualsts 0
+typeResidualsts 0
+
+#############################################
+# Economic statistics - GDP and fuel costs
+nEconts 0
+typeEconts 0
+
+##############################################
+# MPA (spatial management) files for cases where change through time
+# Same format as Catchts above
+nMPAts 0
+typeMPAts 0
+
+# Frequency of inputs.ts and exports.ts output.
+inputs_tout 1 day
+
+use_VertMixFiles 0
+
+##################################################
+### Forced Species Distributions that vary over years (as .NC inputs)
+# See Atlantis User Manual page 85. "Forcing species distributions"
+
+# At top of this file, we have set "use_move_entries 1""  # use forced spatial distributions imported as NC files. See bottom of this file. 
+
+
+nforceMoveGroups 0
+MoveGroupCodes 0
+
+
+#Also list the distribution nc files - 1 file per "MoveGroupCode"
+#
+
+##########################
+# https://confluence.csiro.au/display/Atlantis/2013/07/10/Read+in+forcing+data+for+tracers
+
+# use_external_scaling 1
+
+# scale_all_mortality 0
+# mortality_addition 0
+
+# externalBiologyForcingFile scalar_HCR_exp_long.nc
+
+# externalBiologyForcingFile_rewind 1

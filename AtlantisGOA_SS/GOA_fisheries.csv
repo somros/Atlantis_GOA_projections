@@ -1,0 +1,34 @@
+Code,Index,Name,IsRec,NumSubFleets
+background,1,Background F,0,0
+historical,2,Historical catch,0,0
+NseTrwPolNroa,3,Trawl Pollock Aleutians Kodiak,0,0
+CgTrwMixKi,4,Trawl Mixed Kodiak,0,0
+CgTrwMixSea,5,Trawl Mixed At Sea CG,0,0
+NseTrwMixSea,6,Trawl Mixed At Sea,0,0
+CgOthSpiKo,7,Other Salmon Pinks Kodiak,0,0
+SeOthSsoRoa,8,Other Salmon Sockeye Rest of Alaska,0,0
+WgOthSmxAl,9,Other Salmon Mixed Aleutians,0,0
+CgOthSsoKi,10,Other Salmon Sockeye Kodiak,0,0
+NseOthSsoNki,11,Other Salmon Sockeye Aleutians ROA,0,0
+SeJigSmxRoa,12,Jig Salmon Mixed Rest of Alaska,0,0
+CgOthSmxRoa,13,Other Salmon Mixed Rest of Alaska CG,0,0
+SeOthSmxRoa,14,Other Salmon Mixed Rest of Alaska,0,0
+NseFixCodNroa,15,HAL Jig Pot Cod Aleutians Kodiak At Sea,0,0
+NseTrwCodNroa,16,Trawl Cod Aleutians Kodiak,0,0
+CgHalMixKi,17,Hook and Line Cod Sablefish Kodiak,0,0
+NsePotMixKi,18,Pot Cod Crab Kodiak,0,0
+AllHalHalAll,19,Hook and Line Halibut Aleutians Kodiak ROA,0,0
+NseFixMixNki,20,HAL Pot Cod Sablefish Aleutians ROA,0,0
+SeHalSbfRoa,21,Hook and Line Sablefish Rest of Alaska,0,0
+AllHalSbfSea,22,Hook and Line Sablefish At Sea,0,0
+AllHalMixSea,23,Hook and Line Sablefish Deep demersals At Sea,0,0
+Canada,24,All BC fisheries,0,0
+dummy1,25,Dummy fleet 1,0,0
+dummy2,26,Dummy fleet 2,0,0
+dummy3,27,Dummy fleet 3,0,0
+dummy4,28,Dummy fleet 4,0,0
+dummy5,29,Dummy fleet 5,0,0
+dummy6,30,Dummy fleet 6,0,0
+dummy7,31,Dummy fleet 7,0,0
+dummy8,32,Dummy fleet 8,0,0
+dummy9,33,Dummy fleet 9,0,0
