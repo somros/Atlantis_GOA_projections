@@ -12,7 +12,8 @@ AtlantisGOA_SS_OLD/
 AtlantisGOA_MS/forcings_proj/
 AtlantisGOA_SS/atlantisMerged.pc
 AtlantisGOA_MS/atlantisMerged.pc
-output/
+output/*
+!output/ref_points_from_SS_runs_oct2025.csv
 plots/
 
 data/Groundfish Total Catch.csv
