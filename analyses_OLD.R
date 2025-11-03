@@ -1,6 +1,8 @@
 # Alberto Rovellini
-# 11/03/2025
+# 06/24/2025
 # Plots and analyses of runs using the ecosystem cap / OY algorithm
+
+# NB: as of 6/23/2025, none of these runs attempt to start management at the end of the burn in, AKA there is no burn-in
 
 library(tidyverse)
 library(ggh4x)
@@ -15,24 +17,25 @@ rm(list = ls())
 # General info ------------------------------------------------------------
 
 # set path for reference run
-ref_run <- "000" # check that this makes sense
-oy_dir <- "AtlantisGOA_MS/"
-output_dir <- "../v1"
+ref_run <- 2097 # for now this does not really make sense - this run has OY and HCR management starting on day 1
+oy_dir <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", ref_run)
 
 # source functions script
 source("functions.R")
 
 # handle time
-burnin <- 30
-biom_file <- paste0(output_dir, "/outputGOA_", ref_run, "AgeBiomIndx.txt")
-biom <- read.csv(biom_file, sep = " ", header = T)
-yr_end <- ceiling(max(unique(biom$Time)))/365 # 110
+burnin <- 15
+biom_file <- paste0("outputGOA0", ref_run, "_testAgeBiomIndx.txt")
+biom <- read.csv(paste(oy_dir, biom_file, sep = "/"), sep = " ", header = T)
+yr_end <- ceiling(max(unique(biom$Time)))/365
+# yr_end <- 80 # if the end of the run should be shorter, for example for runs that had been cut short, specify it here
+
 
 # identify boundary boxes - will need this for NAA extraction
-# fl <- 'data/GOA_WGS84_V4_final.bgm'
-# bgm <- rbgm::read_bgm(fl)
-# goa_sf <- rbgm::box_sf(bgm)
-# boundary_boxes <- goa_sf %>% sf::st_set_geometry(NULL) %>% filter(boundary == TRUE) %>% pull(box_id) # get boundary boxes
+fl <- 'data/GOA_WGS84_V4_final.bgm'
+bgm <- rbgm::read_bgm(fl)
+goa_sf <- rbgm::box_sf(bgm)
+boundary_boxes <- goa_sf %>% sf::st_set_geometry(NULL) %>% filter(boundary == TRUE) %>% pull(box_id) # get boundary boxes
 
 # read in species info
 grps <- read.csv("data/GOA_Groups.csv")
@@ -41,7 +44,8 @@ codes <- grps %>% pull(Code)
 ##############################################################
 # species and fleets
 # pull these from a reference OY run - comparing them makes sense only if all species are consistent
-harvest <- readLines(paste(oy_dir, "GOA_harvest_800equal.prm", sep = "/"))
+harvest_prm <- list.files(oy_dir)[grep("GOA_harvest_.*.prm", list.files(oy_dir))]
+harvest <- readLines(paste(oy_dir, harvest_prm, sep = "/"))
 cap_vec <- as.numeric(unlist(strsplit(harvest[grep("FlagSystCapSP", harvest)+1], split = " ")))
 
 # get species that are managed under the OY
@@ -77,8 +81,6 @@ for(i in 1:length(estbo_files)){
   estbo_list[[i]] <- read.csv(estbo_files[i])
 }
 estbo_key <- bind_rows(estbo_list) %>% select(Code, mean_biom) %>% rename(estbo = mean_biom)
-
-ref_points_ss <- read.csv("")
 
 ##############################################################
 # biology information
