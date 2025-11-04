@@ -39,19 +39,56 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
   print(this_run)
   
   # File paths
-  wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
-  biom_file <- paste0("outputGOA0", this_run, "_testAgeBiomIndx.txt")
-  catch_file <- paste0("outputGOA0", this_run, "_testCatch.txt")
-  harvest_prm <- list.files(wd)[grep("GOA_harvest_.*.prm", list.files(wd))]
-  ecocap_file <- paste0(wd, "/outputGOA0", this_run, "_test_EcosystemCapResult.txt")
+  # Old paths for prototype analyses on local
+  # wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  # biom_file <- paste0("outputGOA0", this_run, "_testAgeBiomIndx.txt")
+  # catch_file <- paste0("outputGOA0", this_run, "_testCatch.txt")
+  # harvest_prm <- list.files(wd)[grep("GOA_harvest_.*.prm", list.files(wd))]
+  # ecocap_file <- paste0(wd, "/outputGOA0", this_run, "_test_EcosystemCapResult.txt")
+  
+  # paths for new runs
+  wd <- "../v1"
+  biom_file <- paste0("outputGOA_", this_run, "AgeBiomIndx.txt")
+  catch_file <- paste0("outputGOA_", this_run, "Catch.txt")
+  harvest_prm <- run_combs %>% filter(run_id == as.numeric(this_run)) %>% pull(harvest_file)
+  ecocap_file <- paste0(wd, "/outputGOA_", this_run, "_EcosystemCapResult.txt")
+  
   
   # Read files once
   biom <- read.csv(paste(wd, biom_file, sep = "/"), sep = " ", header = T)
   catch <- read.csv(paste(wd, catch_file, sep = "/"), sep = " ", header = T)
-  harvest <- readLines(paste(wd, harvest_prm, sep = "/"))
+  harvest <- readLines(paste(oy_dir, harvest_prm, sep = "/"))
+  
+  # Force convert all columns except Time to numeric
+  biom <- biom %>%
+    mutate(across(-Time, ~as.numeric(as.character(.))))
+  catch <- catch %>%
+    mutate(across(-Time, ~as.numeric(as.character(.))))
+  
+  # Drop incomplete rows at the end of biom file
+  # Check which rows have all numeric values (excluding Time column)
+  complete_rows_biom <- apply(biom[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+  # Find the last complete row
+  last_complete_biom <- max(which(complete_rows_biom))
+  # Keep only up to the last complete row
+  biom <- biom[1:last_complete_biom, ]
+  
+  # Drop incomplete rows at the end of catch file
+  complete_rows_catch <- apply(catch[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+  last_complete_catch <- max(which(complete_rows_catch))
+  catch <- catch[1:last_complete_catch, ]
   
   if(ecocap){
     ecocap_report <- read.delim(ecocap_file, sep = " ")
+    # Remove columns that are all NA (ghost columns)
+    ecocap_report <- ecocap_report[, colSums(is.na(ecocap_report)) < nrow(ecocap_report)]
+    # Drop incomplete rows at the end of ecocap file
+    complete_rows_ecocap <- apply(ecocap_report, 1, function(x) !any(is.na(x)))
+    last_complete_ecocap <- max(which(complete_rows_ecocap))
+    ecocap_report <- ecocap_report[1:last_complete_ecocap, ]
+    
+    ecocap_report <- ecocap_report %>%
+      mutate(across(-c(Time, SpeciesName, FisheryName), ~as.numeric(as.character(.))))
   }
   
   # subset time early on if necessary
@@ -94,12 +131,12 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
       estbo_vec <- as.numeric(strsplit(harvest[grep("estBo\t", harvest) + 1], split = " ")[[1]])
       estbo <- estbo_vec[sp_idx]
       fref_vec <- as.numeric(strsplit(harvest[grep("Fref\t", harvest) + 1], split = " ")[[1]])
-      fref <- -log(1 - fref_vec[sp_idx])
+      fref <- -log(1 - fref_vec[sp_idx]) # TODO: pull this one from the reference points
     } else { # TODO: you can't take fref from the mfc file because those values are tuned so that the realized f is right
       estbo <- NA
       mfc_line <- harvest[grep(paste0("mFC_", sp, " "), harvest) + 1]
       mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
-      fref <- -(365) * log(1 - mfc)
+      fref <- -(365) * log(1 - mfc) # TODO: pull this one from the F recent data frame? That will show us how good we're doing
     }
     
     harvest_params[[sp]] <- list(startage = startage, w = w, estbo = estbo, fref = fref)
@@ -107,29 +144,81 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
   
   # Process all species at once using vectorized operations
   # Create biomass summaries for all species
-  biom_selex_all <- biom_filtered %>%
+  # biom_selex_all <- biom_filtered %>%
+  #   left_join(
+  #     data.frame(Code = names(harvest_params),
+  #                startage = sapply(harvest_params, `[[`, "startage"),
+  #                w = sapply(harvest_params, `[[`, "w")),
+  #     by = "Code"
+  #   ) %>%
+  #   filter(Age >= startage) %>%
+  #   group_by(Time, Code, w) %>%
+  #   summarise(biom_mt_selex = sum(mt), .groups = 'drop')
+  # 
+  # if(ssb){
+  #   
+  #   biom_tot_all <- biom_filtered %>%
+  #     left_join(fspb_df, by = c("Code", "Age"="age")) %>%
+  #     group_by(Time, Code) %>%
+  #     summarise(biom_mt_tot = sum(mt * fspb), .groups = 'drop')
+  #   
+  # } else {
+  #   
+  #   biom_tot_all <- biom_filtered %>%
+  #     group_by(Time, Code) %>%
+  #     summarise(biom_mt_tot = sum(mt), .groups = 'drop')
+  #   
+  # }
+  
+  
+  # Process all species at once using vectorized operations
+  # Create biomass summaries for all species
+  # Albi: changed code so that it uses max biomass the year prior to account for recruitment / aging dynamics
+  # NB: right now we have one time step per year so this should be identical to how it was before
+  biom_selex_max <- biom_filtered %>%
     left_join(
       data.frame(Code = names(harvest_params),
                  startage = sapply(harvest_params, `[[`, "startage"),
-                 w = sapply(harvest_params, `[[`, "w")),
+                 w_id = sapply(harvest_params, `[[`, "w")),
       by = "Code"
     ) %>%
     filter(Age >= startage) %>%
-    group_by(Time, Code, w) %>%
-    summarise(biom_mt_selex = sum(mt), .groups = 'drop')
+    group_by(Time, Code) %>%
+    summarise(biom_mt_selex = sum(mt), .groups = 'drop') %>% # sum across cohort for total biomass for a group
+    mutate(Year = Time / 365) %>%
+    mutate(Year = floor(Year)) %>%
+    group_by(Year, Code) %>%
+    slice_max(biom_mt_selex) %>%
+    ungroup() %>%
+    mutate(Time = Year * 365) %>% # restore the Time column
+    select(-Year)
   
   if(ssb){
     
     biom_tot_all <- biom_filtered %>%
       left_join(fspb_df, by = c("Code", "Age"="age")) %>%
       group_by(Time, Code) %>%
-      summarise(biom_mt_tot = sum(mt * fspb), .groups = 'drop')
+      summarise(biom_mt_tot = sum(mt * fspb), .groups = 'drop') %>%
+      mutate(Year = Time / 365) %>%
+      mutate(Year = floor(Year)) %>%
+      group_by(Year, Code) %>%
+      slice_max(biom_mt_tot) %>% # get the highest biomass record for the year
+      ungroup() %>%
+      mutate(Time = Year * 365) %>% # restore the Time column
+      select(-Year)
     
   } else {
     
     biom_tot_all <- biom_filtered %>%
       group_by(Time, Code) %>%
-      summarise(biom_mt_tot = sum(mt), .groups = 'drop')
+      summarise(biom_mt_tot = sum(mt), .groups = 'drop') %>%
+      mutate(Year = Time / 365) %>%
+      mutate(Year = floor(Year)) %>%
+      group_by(Year, Code) %>%
+      slice_max(biom_mt_tot) %>% # get the highest biomass record for the year
+      ungroup() %>%
+      mutate(Time = Year * 365) %>% # restore the Time column
+      select(-Year)
     
   }
   
@@ -146,7 +235,7 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
   for(sp in oy_species) {
     sp_params <- harvest_params[[sp]]
     
-    sp_data <- biom_selex_all %>%
+    sp_data <- biom_selex_max %>%
       filter(Code == sp) %>%
       left_join(filter(catch_long, Code == sp), by = c("Time", "Code")) %>%
       left_join(filter(biom_tot_all, Code == sp), by = c("Time", "Code")) %>%
@@ -227,13 +316,13 @@ plot_fishery <- function(catch_df){
   
   # total catch against cap
   p1 <- catch_df %>%
-    filter(Time >= burnin*365) %>%
+    #filter(Time >= burnin*365) %>%
     filter(!is.na(catch_mt)) %>%
-    group_by(Time,run,cap,wgts,env,other) %>%
+    group_by(Time,run,cap,wgts,env) %>%
     summarise(catch_tot = sum(catch_mt),
               biom_tot = sum(biom_mt_selex)) %>%
     ungroup() %>%
-    pivot_longer(-c(Time:other)) %>%
+    pivot_longer(-c(Time:env)) %>%
     ggplot(aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts)))+
     geom_line(linewidth = 0.5)+
     scale_color_manual(values = cap_col)+
@@ -262,12 +351,12 @@ plot_fishery <- function(catch_df){
     current_name <- grps %>% filter(Code == current_code) %>% pull(Name)
     
     p_tmp <- catch_df %>%
-      filter(Time >= burnin*365) %>%
+      #filter(Time >= burnin*365) %>%
       filter(Code == current_code) %>%
       filter(!is.na(catch_mt)) %>%
       mutate(f_frac = f / fref) %>%
-      select(-fref, -f, -biom_mt_tot, -biom_mt_selex, -mu, -w) %>%
-      pivot_longer(-c(Time, Code, Name, run, cap, wgts, env, other)) %>%
+      dplyr::select(-c(fref, f, biom_mt_tot, biom_mt_selex, mu)) %>%
+      pivot_longer(-c(Time, Code, Name, run, cap, wgts, env)) %>%
       ggplot(aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts))) +
       geom_line(linewidth = 0.5) +
       scale_color_manual(values = cap_col)+

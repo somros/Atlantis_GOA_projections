@@ -71,20 +71,27 @@ pref <- data.frame("Code" = oy_species) %>%
 ##############################################################
 # fishery information
 # TODO: move estbo info into fishery PRM file
-estbo_files <- list.files("data/estBo/", full.names = T)
-estbo_list <- list()
-for(i in 1:length(estbo_files)){
-  estbo_list[[i]] <- read.csv(estbo_files[i])
-}
-estbo_key <- bind_rows(estbo_list) %>% select(Code, mean_biom) %>% rename(estbo = mean_biom)
+# estbo_files <- list.files("data/estBo/", full.names = T)
+# estbo_list <- list()
+# for(i in 1:length(estbo_files)){
+#   estbo_list[[i]] <- read.csv(estbo_files[i])
+# }
+# estbo_key <- bind_rows(estbo_list) %>% select(Code, mean_biom) %>% rename(estbo = mean_biom)
 
-ref_points_ss <- read.csv("")
+ref_points_ss <- read.csv("output/ref_points_from_SS_runs_oct2025.csv")
+estbo_key <- ref_points_ss %>% select(Code, b0) %>% rename(estbo = b0)
+
+# need to get fref
+# the value in the prm is an input that may or may not be close
+# for HCR species, get from reference points
+
+# for others, need to get it from external analysis of recent F
 
 ##############################################################
 # biology information
 # maturity at age
-bio_prm <- list.files(oy_dir)[grep("GOAbioparam_.*.prm", list.files(oy_dir))]
-bio <- readLines(paste(oy_dir, bio_prm, sep = "/"))
+bio_prm <- paste0("AtlantisGOA_MS/GOAbioparam.prm")
+bio <- readLines(bio_prm)
 
 fspb_df <- data.frame()
 for(i in 1:length(oy_species)){
@@ -102,8 +109,8 @@ for(i in 1:length(oy_species)){
 }
 
 # diets of pollock's predators
-dietfile <-  paste0("outputGOA0", ref_run, "_testDietCheck.txt")
-diet <- fread(paste(oy_dir, dietfile, sep = "/"), 
+dietfile <-  paste0(output_dir, "/outputGOA_", ref_run, "DietCheck.txt")
+diet <- fread(dietfile, 
               select = c("Time", "Predator", "Cohort", "POL"))
 
 # identify POL's predators: say all groups who have >5% POL in their diets at the end of the burn-in period
@@ -121,7 +128,7 @@ POL_predators <- diet %>%
 ##############################################################
 # make a directory to store plots
 # make a plot directory
-plotdir <- paste0("plots/oy/", ref_run, "_", Sys.Date())
+plotdir <- paste0("plots/oy/", Sys.Date())
 if(!dir.exists(plotdir)){
   dir.create(plotdir, recursive = T)
 } else {
@@ -129,52 +136,29 @@ if(!dir.exists(plotdir)){
 }
 
 # Run properties ----------------------------------------------------------
-# model runs
-#run <- c(2060, 2061, 2064, 2065, 2066, 2067, 2072, 2073, 2074, 2075)
-#run <- c(2072, 2073, 2074, 2075, 2080, 2081, 2082, 2083)
-run <- c(2097:2112, 2124:2143)
+# get this from the MS run key
+run_combs <- read.csv("AtlantisGOA_MS/atlantis_run_combinations.csv")
+run <- run_combs %>% pull(run_id) %>% sprintf("%03d", .)
 
-# caps
-#cap <- c(400, 200, 600, 400, 200, 600, NA, 400, 200, 600) * 1000
-#cap <- rep(c(NA, 400, 200, 600), 2) * 1000
-cap <- rep(c(200,400,600,NA), 9) * 1000
-
-# weight scheme
-#wgts <- c(rep("equal", 3), rep("binary", 4), rep("ramp", 3))
-#wgts <- c(rep("ramp", 8))
-wgts <- c(rep("equal", 8), rep("binary", 8), rep("equal", 4), rep("binary", 4), rep("ramp", 12))
-
-# climate forcings
-# env <- c(rep(1999, 4), rep("2014", 4))
-env <- c(rep(c(rep("ssp126", 4), rep("ssp585", 4)), 2),
-         rep("ssp245", 8),
-         c(rep("ssp126",4), rep("ssp585",4), rep("ssp245", 4)))
-
-# combine all run factors in a label key
-set_key <- function(run, cap = NULL, wgts = NULL, env = NULL, other = NULL) { # gamma = NULL, 
-  # Get the length of run vector
-  n <- length(run)
-  
-  # Set defaults for all arguments except run
-  if (is.null(cap)) cap <- rep(NA, n)
-  if (is.null(wgts)) wgts <- rep(NA, n)
-  #if (is.null(gamma)) gamma <- rep(NA, n) # this is only useful for HCR shape 5
-  if (is.null(env)) env <- rep(NA, n)
-  if (is.null(other)) other <- rep(NA, n) # this could be rec devs or or off, etc
-  
-  key_config <- data.frame(run, cap, wgts, env, other) # gamma, 
-  return(key_config)
-  
-}
-
-key_config <- set_key(run, cap, wgts, env)
+# format this consistently with the key used before to limit changes to the code below
+key_config <- run_combs %>% 
+  mutate(env = gsub (".prm", "", gsub("GOA_force_", "", force_file))) %>% # climate scenario
+  mutate(cap = cap * 1000, # transform to tons
+         run_id = sprintf("%03d", run_id), # run as character
+         env = ifelse(env == "GOA_force", "Constant", env)) %>%
+  select(run_id, cap, weights, env) %>%
+  rename(run = run_id, # naming consistency
+         wgts = weights)
 
 # Apply function to process run output ---------------------------------------------------------
 
-catch_df <- bind_rows(lapply(run, pull_fishery_info))
+# TODO: fix so that we compute F same as in the SS runs
+# Probably won't make a difference but we should be consistent
+
+catch_df_tmp <- bind_rows(lapply(run, pull_fishery_info))
 
 # bind to key, and to group names
-catch_df <- catch_df %>%
+catch_df <- catch_df_tmp %>%
   left_join(key_config, by = "run") %>%
   left_join(grps %>% select(Code, Name), by = "Code")
 
