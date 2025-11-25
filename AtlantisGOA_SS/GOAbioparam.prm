@@ -17968,8 +17968,8 @@ EDL_EUL   0.05
 EDL_TAN   0.1
 EDL_KIN   0.1
 EDL_CRO   0.1
-EDL_PAN   0.5
-EDL_PWN   0.5
+EDL_PAN   0.35
+EDL_PWN   0.25
 EDL_EBC   0.1
 EDL_BG   0.1
 EDL_COR   0.2
@@ -18043,8 +18043,8 @@ EDR_EUL   0.05
 EDR_TAN   0.1
 EDR_KIN   0.1
 EDR_CRO   0.1
-EDR_PAN   0.1
-EDR_PWN   0.1
+EDR_PAN   0.075
+EDR_PWN   0.05
 EDR_EBC   0.1
 EDR_BG   0.1
 EDR_COR   0.2
@@ -18591,19 +18591,19 @@ EUL_mL	2
 
 # Quadratic mortality, inverts. Specify groups of age-structured invertebrates if present
 
-OCT_mQ   0
+OCT_mQ   1e-06
 SQD_mQ   0
 TAN_mQ   0
 KIN_mQ   0
 CRO_mQ   9.999999e-06
-PAN_mQ   0
-PWN_mQ   0
+PAN_mQ   3e-05
+PWN_mQ   3e-05
 EBC_mQ   0
 BG_mQ   0
 COR_mQ   0
 SPG_mQ   0
-BFF_mQ   0
-BIV_mQ   0
+BFF_mQ   1e-09
+BIV_mQ   1e-08
 BC_mQ   0.000001
 BO_mQ   0
 BD_mQ   0.00000333
@@ -18614,7 +18614,7 @@ ZM_mQ   0.0015
 ZS_mQ   0.0003
 JEL_mQ   0.0003
 GEL_mQ   0.0001
-PTE_mQ   0
+PTE_mQ   1e-09
 PL_mQ   0
 PS_mQ   0
 BB_mQ   0
