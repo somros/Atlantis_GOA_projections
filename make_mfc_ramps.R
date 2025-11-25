@@ -6,9 +6,9 @@ library(tidyverse)
 # read in groups
 grps <- read.csv("data/GOA_Groups.csv")
 
-# start from reference run's PRM - using run 2238 as best start
+# start from reference run's PRM - using run 2356 as best start
 # read in reference PRM file
-ref_prm_file <- "AtlantisGOAV0_02303/GOA_harvest_background.prm"
+ref_prm_file <- "AtlantisGOAV0_02356/GOA_harvest_background.prm"
 ref_prm <- readLines(ref_prm_file)
 
 # HCR stocks and Pacific halibut ------------------------------------------
@@ -45,7 +45,7 @@ ramp <- c(0, 0.25, 0.5, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2, 3, 4)
 
 # create a folder to store the harvest.prm and the run_atlantis.sh files
 # if files already exist the file writing below will get corrupted so purge old versions first
-outdir <- "output/single_species_runs/mfc_ramps/"
+outdir <- "output/single_species_runs/mfc_ramps_nov2025/"
 if(dir.exists(outdir)){
   unlink(outdir, recursive = T)
 }
