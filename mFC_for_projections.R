@@ -103,54 +103,54 @@ dat_1990s <- rbind(dat_1990s,
 # you can only compare the groups that have avalue
 dat_1990s <- dat_1990s %>% filter(!is.nan(`F`))
 
-# read recent harvest.prm
-harvest_file <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2281/GOA_harvest_background.prm"
-harvest <- readLines(harvest_file)
-
-# get mFC values
-prm_df <- data.frame()
-for(i in seq_along(unique(dat_1990s$Code))){
-  
-  sp <- dat_1990s$Code[i]
-  
-  mfc_line <- harvest[grep(paste0("mFC_", sp, " "), harvest) + 1]
-  mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
-  
-  prm_df <- rbind(prm_df, data.frame(sp, mfc))
-  
-}
-
-colnames(prm_df) <- c("Code","mFC_prm")
-
-# compare for groups that have new values
-dat_1990s %>%
-  left_join(prm_df) %>%
-  mutate(prop = mFC / mFC_prm) %>%
-  arrange(-prop)
-
-# there are some differences here and we should test this ASAP - may take some calibration
-# POL and COD can take it based on the HCR? POL is fished at FMSY and barely goes below B40
-# worried that SBF will collapse and ATF will boom
-# neat that ATF will be even more inconsequential for BC calculations
-
-# while we are at it and doing a run, let's do another with 2010s values
-dat_2010s <- dat_final %>%
-  filter(Year %in% c(2010:2019)) %>%
-  group_by(Code) %>%
-  summarise(`F` = mean(`F`, na.rm = T))
-
-# turn to mFC
-dat_2010s <- dat_2010s %>%
-  rowwise() %>%
-  mutate(mFC = ifelse(Code %in% exp_rate_stocks,`F`/365,1-exp(-`F`/365))) %>%
-  ungroup()
-
-# compare for groups that have new values
-dat_2010s %>%
-  filter(!is.nan(`F`)) %>%
-  left_join(prm_df) %>%
-  mutate(prop = mFC / mFC_prm) %>%
-  arrange(-prop)
+# # read recent harvest.prm
+# harvest_file <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2281/GOA_harvest_background.prm"
+# harvest <- readLines(harvest_file)
+# 
+# # get mFC values
+# prm_df <- data.frame()
+# for(i in seq_along(unique(dat_1990s$Code))){
+#   
+#   sp <- dat_1990s$Code[i]
+#   
+#   mfc_line <- harvest[grep(paste0("mFC_", sp, " "), harvest) + 1]
+#   mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
+#   
+#   prm_df <- rbind(prm_df, data.frame(sp, mfc))
+#   
+# }
+# 
+# colnames(prm_df) <- c("Code","mFC_prm")
+# 
+# # compare for groups that have new values
+# dat_1990s %>%
+#   left_join(prm_df) %>%
+#   mutate(prop = mFC / mFC_prm) %>%
+#   arrange(-prop)
+# 
+# # there are some differences here and we should test this ASAP - may take some calibration
+# # POL and COD can take it based on the HCR? POL is fished at FMSY and barely goes below B40
+# # worried that SBF will collapse and ATF will boom
+# # neat that ATF will be even more inconsequential for BC calculations
+# 
+# # while we are at it and doing a run, let's do another with 2010s values
+# dat_2010s <- dat_final %>%
+#   filter(Year %in% c(2010:2019)) %>%
+#   group_by(Code) %>%
+#   summarise(`F` = mean(`F`, na.rm = T))
+# 
+# # turn to mFC
+# dat_2010s <- dat_2010s %>%
+#   rowwise() %>%
+#   mutate(mFC = ifelse(Code %in% exp_rate_stocks,`F`/365,1-exp(-`F`/365))) %>%
+#   ungroup()
+# 
+# # compare for groups that have new values
+# dat_2010s %>%
+#   filter(!is.nan(`F`)) %>%
+#   left_join(prm_df) %>%
+#   mutate(prop = mFC / mFC_prm) %>%
+#   arrange(-prop)
 
 # would be very rough for Pcod
 
@@ -168,7 +168,7 @@ dat_2010s %>%
 
 # need to get a recent mFC for all the values that are NOT being changed to 1990s
 #oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Atlantis_GOA_OY_MS/GOA_harvest_background.prm"
-oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2303/GOA_harvest_background.prm"
+oldfile <- "C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_2344/GOA_harvest_background.prm"
 ref_harvest <- readLines(oldfile)
 
 # get harvest parameters outside loop
@@ -182,7 +182,7 @@ for(sp in codes) {
 }
 
 if(!dir.exists("mFC_tuning/")){dir.create("mFC_tuning/")}
-newfile <- paste0('mFC_tuning/mfc_1990s_BEFORE_TUNING_FINAL.prm')
+newfile <- paste0('mFC_tuning/mfc_1990s_BEFORE_TUNING_v3.prm')
 file.create(newfile)
 
 for(i in 1:length(codes)){
@@ -224,7 +224,7 @@ dat_recent <- dat_recent %>%
 
 # NB: these values have to be calibrated
 
-newfile <- paste0('mFC_tuning/mfc_recent_BEFORE_TUNING.prm')
+newfile <- paste0('mFC_tuning/mfc_recent_BEFORE_TUNING_dec2025.prm')
 file.create(newfile)
 
 for(i in 1:length(codes)){

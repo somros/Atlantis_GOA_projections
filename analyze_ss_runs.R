@@ -24,7 +24,8 @@ oy_grp <- c(fmsy_grp, other_fmp_grp)
 # oy_grp <- c("POL", "COD", "POP", "HAL")
 
 # read maturity ogives as presented in the biol.prm file
-bio_prm <- "data/GOAbioparam_SS.prm"
+# bio_prm <- "data/GOAbioparam_SS.prm"
+bio_prm <- "AtlantisGOA_SS/GOAbioparam.prm"
 bio <- readLines(bio_prm)
 
 fspb_df <- data.frame()
@@ -43,7 +44,7 @@ for(i in 1:length(oy_grp)){
 }
 
 # read selectivity start ages from one of the 85 prm files - they are consistent across files
-harvest_file <- "output/single_species_runs/mfc_ramps_NEW/GOA_harvest_000.prm"
+harvest_file <- "output/single_species_runs/mfc_ramps_nov2025/GOA_harvest_000.prm"
 harvest <- readLines(harvest_file)
 
 selex_df <- data.frame()
@@ -61,7 +62,7 @@ for(i in 1:length(oy_grp)) {
 }
 
 # key of mfc applied to each run
-key <- read.csv("output/single_species_runs/mfc_ramps_NEW/reference_table.csv") # fix rthe space
+key <- read.csv("output/single_species_runs/mfc_ramps_nov2025/reference_table.csv") # fix rthe space
 # debugging
 #key <- key %>% filter(idx<47)
 
@@ -70,8 +71,8 @@ fmsy_oy <- read.csv("data/fmsy_Rovellini_2025.csv")
 fmsy_oy <- fmsy_oy %>% left_join(grp %>% select(Code, LongName))
 
 # output file lists
-biom_files <- list.files("output/single_species_runs/ss-80yr-october/", pattern = "BiomIndx", full.names = T, recursive = T)
-catch_files <- list.files("output/single_species_runs/ss-80yr-october/", pattern = "Catch", full.names = T, recursive = T)
+biom_files <- list.files("output/single_species_runs/ss-80yr-november/", pattern = "BiomIndx", full.names = T, recursive = T)
+catch_files <- list.files("output/single_species_runs/ss-80yr-november/", pattern = "Catch", full.names = T, recursive = T)
 
 # run information (change for real runs)
 yr_end <- 80
@@ -208,7 +209,7 @@ ss_df <- ss_df %>%
 # get input target F (i.e. the F that the input mFC corresponds to)
 # there are very large differences between input F and realized F
 ss_df <- ss_df %>%
-  mutate(targ_f = -365 * log(1 - targ_mfc))
+  mutate(targ_f = -365 * log(1 - targ_mfc)) # turning mfc from mfc ramps tracking file back to F yr-1
 
 # get b0, b40, bmsy frames
 b0_df <- ss_df %>% 
@@ -230,7 +231,7 @@ fmsy_ss <- ss_df %>%
   group_by(Code) %>%
   slice_max(catch_mt) %>%
   select(Code, f, targ_f, run) %>%
-  rename(fmsy_realized = f,
+  rename(fmsy_realized = f, # these are both in F yr-1 space
          fmsy_input = targ_f)
 
 # add OFL estimates from most recent full assessment instead of old Atlantis estimates
@@ -293,7 +294,7 @@ p_catch
 combined_plot <- p_biom | p_catch
 combined_plot
 
-ggsave(here("plots", "combined_plots_oct2025.png"), combined_plot, width = 7, height = 5, dpi = 600)
+ggsave(here("plots", "combined_plots_nov2025.png"), combined_plot, width = 7, height = 5, dpi = 600)
 
 # This looks a lot better than the earlier plots, meaning that tuning steepness was useful
 # some comparisons of reference points with the real world
@@ -308,10 +309,10 @@ ggsave(here("plots", "combined_plots_oct2025.png"), combined_plot, width = 7, he
 
 out_tab <- b0_df %>%
   left_join(fmsy_ss, by = "Code") %>%
-  mutate(fref = 1 - exp(-fmsy_input),
+  mutate(fref = 1 - exp(-fmsy_input), # going from F to mu space because fref in the harvest.prm is an exploitation rate
          fref_mfc_for_check = 1 - exp(-fmsy_input/365)) # these track
 
-write.csv(out_tab, "output/ref_points_from_SS_runs_oct2025.csv")
+write.csv(out_tab, "output/ref_points_from_SS_runs_nov2025.csv")
 
 # Diagnostics -------------------------------------------------------------
 

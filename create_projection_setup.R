@@ -55,8 +55,8 @@ file.remove(files_to_remove)
 
 # create template harvest.prm with correct parameters, mfc modifiers, etc.
 # the start point is the same harvest.prm file used to create the set of mfc ramps used in the SS runs
-file.copy("AtlantisGOAV0_02303/GOA_harvest_background.prm", "AtlantisGOA_MS/GOA_harvest_2303.prm")
-harvest_base <- readLines("AtlantisGOA_MS/GOA_harvest_2303.prm")
+file.copy("AtlantisGOAV0_02357/GOA_harvest_background.prm", "AtlantisGOA_MS/GOA_harvest_2357.prm")
+harvest_base <- readLines("AtlantisGOA_MS/GOA_harvest_2357.prm")
 
 # first, change do_sumB_HCR to 2
 # all calibration runs have beeen using 0
@@ -81,7 +81,7 @@ harvest_base[startmanage_line] <- gsub("\t0", "\t10950", harvest_base[startmanag
 # need to setup the HCRs 
 # this is going to use FMSY values from the SS runs for fref, and SSB0 for estBo
 ##############
-ref_points <- read.csv("output/ref_points_from_SS_runs_oct2025.csv")
+ref_points <- read.csv("output/ref_points_from_SS_runs_nov2025.csv")
 
 # clean up
 ref_points <- ref_points %>%
@@ -146,15 +146,15 @@ harvest_base[tierSBF_line] <- gsub("\t0", "\t1", harvest_base[tierSBF_line])
 # the burn-in uses tuned mFC values hitting mean F from the 1990s
 # the projection needs to use tuned mFC values hitting mean F from 2015-2019
 # the run that has those properties is 2306
-# the mFC in 2303 (and the PRM currently being modified) is the base value applied in the burn-in
-# the mFC in 2306 is the target mFC to apply in proj
+# the mFC in 2357 (and the PRM currently being modified) is the base value applied in the burn-in
+# the mFC in 2360 is the target mFC to apply in proj
 # set up a multiplier for the projection
 # set all the necessary flags and switches for the mFC change
 
 # TODO: all this will have to be tested with 1095 (3 years before it all kick in)
 # I tested all this before and it should work but more testing will not hurt
-file.copy("AtlantisGOAV0_02306/GOA_harvest_background.prm", "AtlantisGOA_MS/GOA_harvest_2306.prm")
-harvest_target <- readLines("AtlantisGOA_MS/GOA_harvest_2306.prm")
+file.copy("AtlantisGOAV0_02360/GOA_harvest_background.prm", "AtlantisGOA_MS/GOA_harvest_2360.prm")
+harvest_target <- readLines("AtlantisGOA_MS/GOA_harvest_2360.prm")
 
 # get mFC from current template PRM (the 1990s mFC to scale to proj values)
 burnin_mfc <- list()
@@ -207,9 +207,14 @@ scalars <- scalars %>%
 # write scalars to mFC change in the harvest.prm template and make all other relevant changes to activate mFC change
 oy_grp_and_hal <- c(oy_grp, "HAL") # we need the mfc change setup for HAL as well
 
-for (i in 1:length(oy_grp_and_hal)){
+# NB: do NOT change mfc for groups that have the HCR. Turns out these features stack, so he mfc change parameters should be left at their default if the HCR is on
+# If you turn off the HCR and use fixed F for HCR groups, then you'll have to turn this back on
+
+mfc_change_grps <- setdiff(oy_grp_and_hal, hcr_grp)
+
+for (i in 1:length(mfc_change_grps)){
   
-  sp <- oy_grp_and_hal[i]
+  sp <- mfc_change_grps[i]
   
   # what is the mfc_change factor to apply to reach the target mfc?
   mfc_change <- scalars %>% filter(Code == sp) %>% pull(scalar)

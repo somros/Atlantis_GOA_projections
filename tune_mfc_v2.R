@@ -13,7 +13,7 @@ fished <- grps %>% filter(IsFished==1) %>% pull(Code)
 
 # Reference run with expected (target) mfc --------------------------------
 # reference PRM with the target mFC
-ref_run <- 2304
+ref_run <- 2358
 ref_wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", ref_run)
 ref_harvest_prm <- list.files(ref_wd)[grep("GOA_harvest_.*.prm", list.files(ref_wd))]
 ref_harvest <- readLines(paste(ref_wd, ref_harvest_prm, sep = "/"))
@@ -37,7 +37,7 @@ f_expected <- do.call(rbind, lapply(names(ref_mfc), function(x) {
 
 # Runt to tune ------------------------------------------------------------
 # what run are you tuning
-this_run <- 2305
+this_run <- 2359
 
 # prepare file paths
 wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
@@ -126,6 +126,8 @@ new_mfc <- mfc_to_tune %>%
   mutate(new_mfc = mfc * prop)
 
 # write new mfc vectors
+# AR 11/24/2025: tuning only groundfish as that is the focus of this paper
+to_tune <- c("POL", "COD", "ATF", "FHS", "REX", "FFS", "FFD", "SKL", "SKB", "SKO", "SBF", "POP", "RFS", "RFP", "RFD", "THO", "DFS", "DFD", "SCU", "HAL")
 
 # turn mFC_frame_new back to section of prm file and write out
 newfile <- paste0('mFC_tuning/mFC_from_', this_run, '.prm')
@@ -141,7 +143,7 @@ for(i in 1:length(codes)){
     parval <- 0
   }
   
-  if(sp == "SPI"){ # do not tune SPI
+  if(sp %in% names(harvest_params) && !sp %in% to_tune){ # tune only groundfish
     parval <- harvest_params[[which(names(harvest_params)==sp)]]$mfc
   }
   
