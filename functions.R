@@ -47,7 +47,7 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
   # ecocap_file <- paste0(wd, "/outputGOA0", this_run, "_test_EcosystemCapResult.txt")
   
   # paths for new runs
-  wd <- "../v1"
+  wd <- "../v2"
   biom_file <- paste0("outputGOA_", this_run, "AgeBiomIndx.txt")
   catch_file <- paste0("outputGOA_", this_run, "Catch.txt")
   harvest_prm <- run_combs %>% filter(run_id == as.numeric(this_run)) %>% pull(harvest_file)
@@ -124,22 +124,24 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
     # get weight
     idx <- grep(sp, grps %>% pull(Code))
     w_line <- harvest[grep("SystCapSPpref", harvest) + 1]
-    w <- as.numeric((strsplit(w_line, split = " "))[[1]])[idx]
+    w_id <- as.numeric((strsplit(w_line, split = " "))[[1]])[idx]
     
     if(sp %in% hcr_spp) {
       sp_idx <- grep(sp, codes)
       estbo_vec <- as.numeric(strsplit(harvest[grep("estBo\t", harvest) + 1], split = " ")[[1]])
       estbo <- estbo_vec[sp_idx]
       fref_vec <- as.numeric(strsplit(harvest[grep("Fref\t", harvest) + 1], split = " ")[[1]])
-      fref <- -log(1 - fref_vec[sp_idx]) # TODO: pull this one from the reference points
+      #fref <- -log(1 - fref_vec[sp_idx]) # TODO: pull this one from the reference points
     } else { # TODO: you can't take fref from the mfc file because those values are tuned so that the realized f is right
       estbo <- NA
       mfc_line <- harvest[grep(paste0("mFC_", sp, " "), harvest) + 1]
       mfc <- as.numeric(strsplit(mfc_line, split = " ")[[1]])[1]
-      fref <- -(365) * log(1 - mfc) # TODO: pull this one from the F recent data frame? That will show us how good we're doing
+      #fref <- -(365) * log(1 - mfc) # TODO: pull this one from the F recent data frame? That will show us how good we're doing
     }
     
-    harvest_params[[sp]] <- list(startage = startage, w = w, estbo = estbo, fref = fref)
+    fref <- fref_frame %>% filter(Code == sp) %>% pull(fref) # now pull fref from external data frame
+    
+    harvest_params[[sp]] <- list(startage = startage, w_id = w_id, estbo = estbo, fref = fref)
   }
   
   # Process all species at once using vectorized operations
@@ -179,7 +181,7 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
     left_join(
       data.frame(Code = names(harvest_params),
                  startage = sapply(harvest_params, `[[`, "startage"),
-                 w_id = sapply(harvest_params, `[[`, "w")),
+                 w_id = sapply(harvest_params, `[[`, "w_id")),
       by = "Code"
     ) %>%
     filter(Age >= startage) %>%
@@ -244,7 +246,8 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
         f = -log(1 - mu),
         biom_frac = biom_mt_tot / sp_params$estbo,
         fref = sp_params$fref,
-        run = this_run
+        run = this_run,
+        w_id = sp_params$w_id
       )
     
     result_list[[sp]] <- sp_data
@@ -316,6 +319,7 @@ plot_fishery <- function(catch_df){
   
   # total catch against cap
   p1 <- catch_df %>%
+    filter(Time > 0) %>%
     #filter(Time >= burnin*365) %>%
     filter(!is.na(catch_mt)) %>%
     group_by(Time,run,cap,wgts,env) %>%
@@ -324,11 +328,14 @@ plot_fishery <- function(catch_df){
     ungroup() %>%
     pivot_longer(-c(Time:env)) %>%
     ggplot(aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts)))+
+    annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+             fill = "grey", alpha = 0.3) +
     geom_line(linewidth = 0.5)+
     scale_color_manual(values = cap_col)+
     #scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     scale_linetype_manual(values = c("solid","dashed","dotted"))+
-    geom_hline(aes(yintercept = as.numeric(cap)), linetype = "dashed", linewidth = 0.25)+
+    geom_hline(aes(yintercept = as.numeric(as.character(cap))), linetype = "dashed", linewidth = 0.25)+
+    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     theme_bw()+
     scale_y_continuous(limits = c(0,NA))+
     labs(x = "Year", 
@@ -350,18 +357,31 @@ plot_fishery <- function(catch_df){
     current_code <- oy_species[i]
     current_name <- grps %>% filter(Code == current_code) %>% pull(Name)
     
-    p_tmp <- catch_df %>%
+    p_df <- catch_df %>%
+      filter(Time > 0) %>%
       #filter(Time >= burnin*365) %>%
       filter(Code == current_code) %>%
       filter(!is.na(catch_mt)) %>%
       mutate(f_frac = f / fref) %>%
-      dplyr::select(-c(fref, f, biom_mt_tot, biom_mt_selex, mu)) %>%
-      pivot_longer(-c(Time, Code, Name, run, cap, wgts, env)) %>%
-      ggplot(aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts))) +
+      dplyr::select(-c(fref, f, biom_mt_tot, biom_mt_selex, mu, w_id)) %>%
+      pivot_longer(-c(Time, Code, Name, run, cap, wgts, env))
+    
+    p_tmp <- ggplot(data = p_df, aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts))) +
+      annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+               fill = "grey", alpha = 0.3) +
       geom_line(linewidth = 0.5) +
       scale_color_manual(values = cap_col)+
       scale_linetype_manual(values = c("solid","dashed","dotted"))+
       scale_y_continuous(limits = c(0,NA)) +
+      {if(oy_species[i] %in% hcr_spp) 
+        geom_hline(data = data.frame(name = "biom_frac", 
+                                     env = unique(catch_df$env)),
+                   aes(yintercept = 0.4), linetype = "dotted", color = "blue")} + 
+      {if(oy_species[i] %in% hcr_spp) 
+        geom_hline(data = data.frame(name = "biom_frac", 
+                                     env = unique(catch_df$env)),
+                   aes(yintercept = 0.2), linetype = "dotted", color = "red")} + 
+      # geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
       facet_grid2(env ~ name, scales = "free_y", independent = "y") +
       labs(title = current_name,
            x = "Year", 
@@ -386,7 +406,7 @@ plot_fishery <- function(catch_df){
     
     # TODO: sort out faceting - you want the interesting feature to be in the same panel (e.g., facet by weight scheme or by climate scenario?)
     p2 <- catch_df %>%
-      filter(Time >= burnin*365) %>%
+      filter(Time >= (burnin + 5)*365) %>%
       filter(Code == current_code, !is.na(catch_mt)) %>%
       ggplot(aes(x = biom_frac, y = f/fref, color = Time/365))+
       geom_point(aes(shape = factor(wgts)), size = 1)+
@@ -414,40 +434,65 @@ plot_fishery <- function(catch_df){
   
   # catch of preferred species vs biomass of all species
   # preferred species should not be based on the we
+  # First, create pref_catch with decadal aggregation
   pref_catch <- catch_df %>%
     filter(!is.na(catch_mt)) %>%
-    #left_join(pref, by = c("Code","wgts")) %>%
     left_join(pref, by = "Code") %>%
     filter(pref==1) %>%
-    group_by(Time,run,cap,wgts,env)%>%
-    summarise(catch_mt = sum(catch_mt))
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(catch_mt = sum(catch_mt), .groups = 'drop') %>%
+    mutate(decade = floor(Time/365/10)) %>%  # Create decade variable
+    filter(decade %in% c(3, 10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
+    group_by(decade, run, cap, wgts, env) %>%
+    summarise(
+      catch_mt_mean = mean(catch_mt),
+      catch_mt_sd = sd(catch_mt),
+      .groups = 'drop'
+    )
   
-  # then biom tot, join, plot
+  # Then compute biomass totals and join
+  # I am unsure this plot is useful
   p3 <- catch_df %>%
     filter(Time >= burnin*365) %>%
     filter(!is.na(catch_mt)) %>%
-    group_by(Time,run,cap,wgts,env)%>%
-    summarise(biom_mt_tot = sum(biom_mt_tot)) %>%
-    left_join(pref_catch) %>%
-    ggplot(aes(x=biom_mt_tot, y = catch_mt, color = factor(cap), shape = factor(wgts)))+
-    geom_point(size = 1)+
-    scale_color_manual(values = cap_col)+
-    scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
-    scale_x_continuous(limits = c(0,NA))+
-    scale_y_continuous(limits = c(0,NA))+
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(biom_mt_tot = sum(biom_mt_tot), .groups = 'drop') %>%
+    mutate(decade = floor(Time/365/10)) %>%  # Create decade variable
+    filter(decade %in% c(3, 10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
+    group_by(decade, run, cap, wgts, env) %>%
+    summarise(
+      biom_mt_tot_mean = mean(biom_mt_tot),
+      biom_mt_tot_sd = sd(biom_mt_tot),
+      .groups = 'drop'
+    ) %>%
+    left_join(pref_catch, by = c("decade", "run", "cap", "wgts", "env")) %>%
+    ggplot(aes(x = biom_mt_tot_mean, y = catch_mt_mean, 
+               color = factor(cap), shape = factor(wgts))) +
+    geom_errorbar(aes(ymin = catch_mt_mean - catch_mt_sd, 
+                      ymax = catch_mt_mean + catch_mt_sd),
+                  width = 0, alpha = 0.3) +
+    geom_errorbarh(aes(xmin = biom_mt_tot_mean - biom_mt_tot_sd,
+                       xmax = biom_mt_tot_mean + biom_mt_tot_sd),
+                   height = 0, alpha = 0.3) +
+    geom_point(size = 2, position = position_dodge(width = 1)) +
+    scale_color_manual(values = cap_col) +
+    scale_shape_manual(values = c(1:length(unique(catch_df$wgts)))) +
+    # scale_x_continuous(limits = c(0, NA)) +
+    # scale_y_continuous(limits = c(0, NA)) +
     labs(x = "Biomass of all OY species (mt)",
          y = "Catch of pollock, cod, POP, sablefish (mt)",
          color = "Cap (mt)",
          shape = "Weight scheme",
-         title = "Catch-biomass tradeoff")+
-    theme_bw()+
-    facet_wrap(~env)
+         title = "Catch-biomass tradeoff") +
+    theme_bw() +
+    facet_grid(env ~ decade)
   
   ggsave(paste0(plotdir, "/", "catch_vs_biomass.png"), p3, 
-         width = 10, height = 4.5, 
+         width = 8, height = 4.5, 
          units = "in", dpi = 300)
   
   # Tradeoff plot between ATF biomass and POL biomass and their respective F
+  # TODO: turn this to mean per decade
   pol <- catch_df %>%
     filter(Code == "POL") %>%
     select(Time, biom_frac, f, run, cap:env) %>%
@@ -502,7 +547,7 @@ plot_fishery <- function(catch_df){
                            ifelse(Time/365>(yr_end-10), "late", NA))) %>%
     ungroup() %>%
     filter(!is.na(period)) %>%
-    group_by(run,cap,wgts,env,other,period,Code,Name,w,fref) %>%
+    group_by(run,cap,wgts,env,other,period,Code,Name,w_id,fref) %>%
     summarize(biom_mt_tot = mean(biom_mt_tot),
               catch_mt = mean(catch_mt),
               f = mean(f),
@@ -608,11 +653,14 @@ setNA <- function(mat) {
 #' }
 get_H <- function(this_run, do_mature){
   
+  #TODO: turn this to decadal avg
+  
   print(paste(this_run, "NAA"))
   
   # File paths
-  wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
-  ncfile <- paste0(wd, "/outputGOA0", this_run, "_test.nc")
+  #wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  wd <- "../v2"
+  ncfile <- paste0(wd, "/outputGOA_", this_run, ".nc")
   
   # Open file
   this_ncdata <- nc_open(ncfile)
@@ -717,12 +765,15 @@ get_H <- function(this_run, do_mature){
 #' }
 get_polprop <- function(this_run){
   
+  #TODO: avg by decade instead of full time series
+  
   print(this_run)
   
   # File paths
-  wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
-  dietfile <-  paste0("outputGOA0", this_run, "_testDietCheck.txt")
-  diet <- fread(paste(wd, dietfile, sep = "/"), 
+  #wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  wd <- "../v2"
+  dietfile <-  paste0(wd, "/outputGOA_", this_run, "DietCheck.txt")
+  diet <- fread((dietfile), 
                 select = c("Time", "Predator", "Cohort", "POL"))
   
   diet1 <- diet %>%
@@ -734,4 +785,1204 @@ get_polprop <- function(this_run){
   
   diet1 <- diet1 %>% mutate(run = this_run)
   return(diet1)
+}
+
+#' Calculate Ecosystem Indicators from Biomass Output
+#'
+#' @description
+#' Calculates ecosystem indicators based on biomass ratios between functional
+#' groups from Atlantis model output. Summarizes by decade for all decades
+#' after the burn-in period.
+#'
+#' @param this_run Character. The run number/ID for the Atlantis model simulation
+#'
+#' @return Data frame containing:
+#'   \item{decade}{Decade number}
+#'   \item{indicator}{Indicator name}
+#'   \item{value_mean}{Mean indicator value}
+#'   \item{value_sd}{Standard deviation of indicator value}
+#'   \item{run}{Run number}
+#'   \item{cap}{Cap level}
+#'   \item{wgts}{Weight scheme}
+#'   \item{env}{Climate scenario}
+#'
+#' @details
+#' Reads AgeBiomIndx.txt files and calculates four ecosystem indicators:
+#' \itemize{
+#'   \item gadids_flatfish: Gadids biomass / Flatfish biomass
+#'   \item roundfish_flatfish: Roundfish biomass / Flatfish biomass
+#'   \item shrimp_oy: Shrimp biomass / OY species biomass
+#'   \item forage_oy: Forage fish biomass / OY species biomass
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' indicators <- calc_ecosystem_indicators("2097")
+#' }
+calc_ecosystem_indicators <- function(this_run){
+  
+  print(this_run)
+  
+  # Define functional groups
+  gadids <- c("POL", "COD")
+  flatfish <- c("ATF", "REX", "FFS", "FFD", "FHS")
+  roundfish <- c("POL", "COD", "SBF")
+  rockfish <- c("POP", "RFS", "RFD", "RFP", "THO")
+  shrimp <- c("PAN", "PWN")
+  forage <- c("HER", "SAN", "CAP", "FOS", "EUL")
+  
+  # File paths
+  wd <- "../v2"
+  biom_file <- paste0("outputGOA_", this_run, "AgeBiomIndx.txt")
+  
+  # Read biomass file
+  biom <- read.csv(paste(wd, biom_file, sep = "/"), sep = " ", header = T)
+  
+  # Force convert all columns except Time to numeric
+  biom <- biom %>%
+    mutate(across(-Time, ~as.numeric(as.character(.))))
+  
+  # Drop incomplete rows at the end
+  complete_rows_biom <- apply(biom[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+  last_complete_biom <- max(which(complete_rows_biom))
+  biom <- biom[1:last_complete_biom, ]
+  
+  # Subset to time range
+  biom <- biom %>% filter(Time/365 <= yr_end)
+  
+  # Convert to long format
+  biom_long <- biom %>%
+    pivot_longer(-Time, names_to = "Code.Age", values_to = "mt")
+  
+  # Split Code and Age
+  code_age_split <- strsplit(biom_long$Code.Age, "\\.", fixed = FALSE)
+  biom_long$Code <- sapply(code_age_split, `[`, 1)
+  biom_long$Age <- as.numeric(sapply(code_age_split, `[`, 2))
+  
+  # Calculate total biomass by species and time
+  biom_by_species <- biom_long %>%
+    group_by(Time, Code) %>%
+    summarise(biom_mt = sum(mt, na.rm = TRUE), .groups = 'drop')
+  
+  # Calculate functional group biomasses
+  biom_functional <- biom_by_species %>%
+    mutate(
+      gadids = ifelse(Code %in% gadids, biom_mt, 0),
+      flatfish = ifelse(Code %in% flatfish, biom_mt, 0),
+      roundfish = ifelse(Code %in% roundfish, biom_mt, 0),
+      shrimp = ifelse(Code %in% shrimp, biom_mt, 0),
+      forage = ifelse(Code %in% forage, biom_mt, 0),
+      oy = ifelse(Code %in% oy_species, biom_mt, 0)
+    ) %>%
+    group_by(Time) %>%
+    summarise(
+      gadids_biom = sum(gadids),
+      flatfish_biom = sum(flatfish),
+      roundfish_biom = sum(roundfish),
+      shrimp_biom = sum(shrimp),
+      forage_biom = sum(forage),
+      oy_biom = sum(oy),
+      .groups = 'drop'
+    )
+  
+  # Calculate indicators
+  indicators <- biom_functional %>%
+    mutate(
+      gadids_to_flatfish = gadids_biom / flatfish_biom,
+      roundfish_to_flatfish = roundfish_biom / flatfish_biom,
+      shrimp_to_oy_spp = shrimp_biom / oy_biom,
+      forage_to_oy_spp = forage_biom / oy_biom
+    ) %>%
+    select(Time, gadids_to_flatfish:forage_to_oy_spp)
+  
+  # Add decade, summarize
+  indicators_decadal <- indicators %>%
+    filter(Time >= burnin*365) %>%
+    mutate(decade = floor(Time/365/10)) %>%
+    pivot_longer(-c(Time, decade), names_to = "indicator", values_to = "value") %>%
+    group_by(decade, indicator) %>%
+    summarise(
+      value_mean = mean(value, na.rm = TRUE),
+      value_sd = sd(value, na.rm = TRUE),
+      .groups = 'drop'
+    ) %>%
+    mutate(run = this_run)
+  
+  # Add metadata from key_config
+  indicators_decadal <- indicators_decadal %>%
+    left_join(key_config, by = "run")
+  
+  return(indicators_decadal)
+}
+
+#' Plot Ecosystem Indicators as Time Series
+#'
+#' @description
+#' Creates time series plot of ecosystem indicators with decades on the x-axis,
+#' faceted by indicator and climate scenario.
+#'
+#' @param indicators_df Data frame. Output from calc_ecosystem_indicators()
+#'   containing ecosystem indicator values across runs and scenarios
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Creates a plot with:
+#' \itemize{
+#'   \item X-axis: Decade
+#'   \item Y-axis: Indicator value
+#'   \item Points with error bars (no lines)
+#'   \item Color by cap level
+#'   \item Shape by weight scheme
+#'   \item Facets: indicator (rows) × env (columns)
+#'   \item Reference line at y=1
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_ecosystem_indicators(indicators_df)
+#' }
+plot_ecosystem_indicators <- function(indicators_df){
+  
+  # turn caps into factors for better plotting
+  indicators_df$cap <- as.character(indicators_df$cap)
+  indicators_df$cap[is.na(indicators_df$cap)] <- "No cap"
+  indicators_df$cap <- factor(indicators_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  # order weigths
+  indicators_df$wgts <- factor(indicators_df$wgts, levels = c("equal","binary","ramp"))
+  
+  # Make palette
+  cap_col <- pnw_palette(name="Sunset2", n=length(unique(indicators_df$cap)), type="discrete")
+  
+  # Time series plot with points and error bars
+  p <- indicators_df %>%
+    ggplot(aes(x = decade, y = value_mean, 
+               color = factor(cap), 
+               shape = factor(wgts))) +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.5) +
+    geom_point(size = 2.5, position = position_dodge(width = 0.3)) +
+    geom_errorbar(aes(ymin = value_mean - value_sd, 
+                      ymax = value_mean + value_sd),
+                  width = 0.2, alpha = 0.5,
+                  position = position_dodge(width = 0.3)) +
+    scale_color_manual(values = cap_col) +
+    scale_shape_manual(values = c(1:length(unique(indicators_df$wgts)))) +
+    scale_y_continuous(limits = c(0, NA)) +
+    scale_x_continuous(breaks = unique(indicators_df$decade)) +
+    theme_bw() +
+    # theme(
+    #   strip.text = element_text(size = 10),
+    #   legend.position = "bottom"
+    # ) +
+    labs(
+      x = "Decade",
+      y = "Indicator value (mean ± SD)",
+      color = "Cap (mt)",
+      shape = "Weight scheme",
+      title = "Ecosystem indicators over time"
+    ) +
+    facet_grid(indicator ~ env, scales = "free_y")
+  
+  ggsave(paste0(plotdir, "/ecosystem_indicators.png"), p,
+         width = 12, height = length(unique(indicators_df$indicator)) * 1.5,
+         units = "in", dpi = 300)
+  
+}
+
+#' #' Plot Ecosystem Indicators as Radar Charts
+#' #'
+#' #' @description
+#' #' Creates radar (spider) plots of ecosystem indicators using raw ratio values,
+#' #' with color representing weight schemes. Allows filtering by cap, env, and decade.
+#' #'
+#' #' @param indicators_df Data frame. Output from calc_ecosystem_indicators()
+#' #'   containing ecosystem indicator values across runs and scenarios
+#' #' @param cap_filter Numeric or NULL. Cap value to filter to (default NULL for all)
+#' #' @param env_filter Character or NULL. Environment to filter to (default NULL for all)
+#' #' @param decade_filter Numeric or NULL. Decade to filter to (default NULL for all)
+#' #'
+#' #' @return NULL (function creates and saves plots to plotdir)
+#' #'
+#' #' @details
+#' #' Creates radar plots showing four ecosystem indicators using raw ratio values.
+#' #' Uses ggradar package with color representing weight schemes.
+#' #' Filter to specific combinations to avoid overcrowding.
+#' #'
+#' #' @examples
+#' #' \dontrun{
+#' #' # Single specific scenario
+#' #' plot_ecosystem_indicators_radar(indicators_all, cap_filter = 4e+05, 
+#' #'                                  env_filter = "ssp585", decade_filter = 9)
+#' #' 
+#' #' # All decades for one cap and env
+#' #' plot_ecosystem_indicators_radar(indicators_all, cap_filter = 4e+05, 
+#' #'                                  env_filter = "ssp585", decade_filter = NULL)
+#' #' }
+#' plot_ecosystem_indicators_radar <- function(indicators_df, 
+#'                                             cap_filter = NULL, 
+#'                                             env_filter = NULL,
+#'                                             decade_filter = NULL){
+#'   
+#'   library(ggradar)
+#'   
+#'   # Color palette for weight schemes
+#'   wgts_col <- c("equal" = "#2E5266", "binary" = "#D65108", "ramp" = "#6B9080")
+#'   
+#'   # Filter data based on arguments
+#'   radar_data <- indicators_df
+#'   
+#'   if(!is.null(cap_filter)) {
+#'     radar_data <- radar_data %>% filter(cap == cap_filter)
+#'   }
+#'   
+#'   if(!is.null(env_filter)) {
+#'     radar_data <- radar_data %>% filter(env == env_filter)
+#'   }
+#'   
+#'   if(!is.null(decade_filter)) {
+#'     radar_data <- radar_data %>% filter(decade == decade_filter)
+#'   }
+#'   
+#'   # Check if data remains
+#'   if(nrow(radar_data) == 0) {
+#'     stop("No data remaining after filtering. Check filter values.")
+#'   }
+#'   
+#'   # Determine min and max across all indicators for consistent scaling
+#'   global_min <- min(radar_data$value_mean, na.rm = TRUE)
+#'   global_max <- max(radar_data$value_mean, na.rm = TRUE)
+#'   
+#'   # Prepare data for ggradar (needs wide format)
+#'   radar_prep <- radar_data %>%
+#'     select(decade, env, cap, wgts, indicator, value_mean) %>%
+#'     mutate(group = as.character(wgts)) %>%
+#'     select(decade, env, cap, group, indicator, value_mean) %>%
+#'     pivot_wider(names_from = indicator, values_from = value_mean)
+#'   
+#'   # Create separate plots for remaining combinations
+#'   plot_list <- list()
+#'   idx <- 1
+#'   
+#'   remaining_caps <- unique(radar_prep$cap)
+#'   remaining_envs <- unique(radar_prep$env)
+#'   remaining_decades <- unique(radar_prep$decade)
+#'   
+#'   for(c in remaining_caps) {
+#'     for(e in remaining_envs) {
+#'       for(d in remaining_decades) {
+#'         plot_data <- radar_prep %>%
+#'           filter(env == e, decade == d, cap == c) %>%
+#'           select(-env, -decade, -cap)
+#'         
+#'         if(nrow(plot_data) > 0) {
+#'           # Match colors to weight schemes
+#'           wgts_levels <- unique(plot_data$group)
+#'           plot_colors <- wgts_col[match(wgts_levels, names(wgts_col))]
+#'           
+#'           # Create title based on what's being shown
+#'           title_parts <- c()
+#'           if(length(remaining_caps) > 1) title_parts <- c(title_parts, paste("Cap:", c))
+#'           if(length(remaining_envs) > 1) title_parts <- c(title_parts, e)
+#'           if(length(remaining_decades) > 1) title_parts <- c(title_parts, paste("Decade", d))
+#'           
+#'           plot_title <- if(length(title_parts) > 0) {
+#'             paste(title_parts, collapse = " | ")
+#'           } else {
+#'             paste("Cap:", c, "|", e, "| Decade", d)
+#'           }
+#'           
+#'           p_tmp <- ggradar(plot_data,
+#'                            grid.min = floor(global_min * 10) / 10,
+#'                            grid.mid = (floor(global_min * 10) / 10 + ceiling(global_max * 10) / 10) / 2,
+#'                            grid.max = ceiling(global_max * 10) / 10,
+#'                            values.radar = c(
+#'                              as.character(floor(global_min * 10) / 10),
+#'                              as.character(round((floor(global_min * 10) / 10 + ceiling(global_max * 10) / 10) / 2, 1)),
+#'                              as.character(ceiling(global_max * 10) / 10)
+#'                            ),
+#'                            group.colours = plot_colors,
+#'                            group.point.size = 3,
+#'                            group.line.width = 1.2,
+#'                            gridline.mid.colour = "grey70",
+#'                            gridline.min.colour = "grey90",
+#'                            gridline.max.colour = "grey90",
+#'                            background.circle.colour = "white",
+#'                            axis.label.size = 4,
+#'                            grid.label.size = 3.5,
+#'                            legend.position = "bottom",
+#'                            legend.text.size = 10,
+#'                            legend.title = "Weight scheme") +
+#'             labs(title = plot_title) +
+#'             theme(plot.title = element_text(size = 11, hjust = 0.5))
+#'           
+#'           plot_list[[idx]] <- p_tmp
+#'           idx <- idx + 1
+#'         }
+#'       }
+#'     }
+#'   }
+#'   
+#'   # Combine plots if multiple
+#'   if(length(plot_list) > 1) {
+#'     library(patchwork)
+#'     
+#'     # Determine layout
+#'     n_plots <- length(plot_list)
+#'     if(length(remaining_decades) > 1) {
+#'       ncol_val <- length(remaining_decades)
+#'     } else if(length(remaining_envs) > 1) {
+#'       ncol_val <- length(remaining_envs)
+#'     } else {
+#'       ncol_val <- min(3, n_plots)
+#'     }
+#'     
+#'     combined_plot <- wrap_plots(plot_list, ncol = ncol_val)
+#'     
+#'     # Create filename suffix based on filters
+#'     suffix_parts <- c()
+#'     if(!is.null(cap_filter)) suffix_parts <- c(suffix_parts, paste0("cap", cap_filter))
+#'     if(!is.null(env_filter)) suffix_parts <- c(suffix_parts, env_filter)
+#'     if(!is.null(decade_filter)) suffix_parts <- c(suffix_parts, paste0("dec", decade_filter))
+#'     
+#'     filename_suffix <- if(length(suffix_parts) > 0) {
+#'       paste0("_", paste(suffix_parts, collapse = "_"))
+#'     } else {
+#'       ""
+#'     }
+#'     
+#'     filename_suffix <- gsub("\\+", "", filename_suffix)
+#'     
+#'     ggsave(paste0(plotdir, "/ecosystem_indicators_radar", filename_suffix, ".png"), 
+#'            combined_plot,
+#'            width = 5 * ncol_val, 
+#'            height = 5 * ceiling(n_plots / ncol_val), 
+#'            units = "in", dpi = 300)
+#'   } else {
+#'     # Single plot
+#'     p <- plot_list[[1]]
+#'     
+#'     # Create filename suffix
+#'     suffix_parts <- c()
+#'     if(!is.null(cap_filter)) suffix_parts <- c(suffix_parts, paste0("cap", cap_filter))
+#'     if(!is.null(env_filter)) suffix_parts <- c(suffix_parts, env_filter)
+#'     if(!is.null(decade_filter)) suffix_parts <- c(suffix_parts, paste0("dec", decade_filter))
+#'     
+#'     filename_suffix <- if(length(suffix_parts) > 0) {
+#'       paste0("_", paste(suffix_parts, collapse = "_"))
+#'     } else {
+#'       ""
+#'     }
+#'     
+#'     filename_suffix <- gsub("\\+", "", filename_suffix)
+#'     
+#'     ggsave(paste0(plotdir, "/ecosystem_indicators_radar", filename_suffix, ".png"), 
+#'            p, width = 6, height = 6, units = "in", dpi = 300)
+#'   }
+#'   
+#' }
+#' 
+#' #' Calculate Total Revenue from Catch
+#'
+#' @description
+#' Calculates total revenue from catch of OY species using species-specific
+#' prices and catch data from Atlantis model output.
+#'
+#' @param this_run Character. The run number/ID for the Atlantis model simulation
+#' @param price_dat Data frame. Contains Code and mean_price columns ($/lb)
+#'
+#' @return Data frame containing:
+#'   \item{Time}{Time step from model output}
+#'   \item{revenue}{Total revenue in dollars}
+#'   \item{run}{Run number}
+#'   \item{cap}{Cap level}
+#'   \item{wgts}{Weight scheme}
+#'   \item{env}{Climate scenario}
+#'
+#' @details
+#' Reads Catch.txt files, filters to OY species, converts catch from metric
+#' tons to pounds (1 mt = 2204.62 lbs), multiplies by species-specific prices,
+#' and sums across all OY species to get total revenue.
+#'
+#' @examples
+#' \dontrun{
+#' price_dat <- read.csv("data/price.csv")
+#' revenue <- calc_revenue("2097", price_dat)
+#' }
+calc_revenue <- function(this_run, price_dat){
+  
+  print(this_run)
+  
+  # Conversion factor
+  mt_to_lbs <- 2204.62
+  
+  # File paths
+  wd <- "../v2"
+  catch_file <- paste0("outputGOA_", this_run, "Catch.txt")
+  
+  # Read catch file
+  catch <- read.csv(paste(wd, catch_file, sep = "/"), sep = " ", header = T)
+  
+  # Force convert all columns except Time to numeric
+  catch <- catch %>%
+    mutate(across(-Time, ~as.numeric(as.character(.))))
+  
+  # Drop incomplete rows at the end
+  complete_rows_catch <- apply(catch[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+  last_complete_catch <- max(which(complete_rows_catch))
+  catch <- catch[1:last_complete_catch, ]
+  
+  # Subset to time range
+  catch <- catch %>% filter(Time/365 <= yr_end)
+  
+  # Convert to long format and filter to OY species
+  catch_long <- catch %>%
+    select(Time, all_of(oy_species)) %>%
+    pivot_longer(-Time, names_to = "Code", values_to = "catch_mt")
+  
+  # Join with prices, convert to lbs, calculate revenue
+  revenue_data <- catch_long %>%
+    left_join(price_dat, by = "Code") %>%
+    mutate(
+      catch_lbs = catch_mt * mt_to_lbs,
+      revenue = catch_lbs * mean_price
+    ) %>%
+    group_by(Time) %>%
+    summarise(revenue = sum(revenue, na.rm = TRUE), .groups = 'drop') %>%
+    mutate(run = this_run)
+  
+  # Add metadata from key_config
+  revenue_data <- revenue_data %>%
+    left_join(key_config, by = "run")
+  
+  return(revenue_data)
+}
+
+#' Plot Total Revenue from OY Species
+#'
+#' @description
+#' Creates time series plots of total revenue from OY species catch,
+#' distinguished by cap levels and weight schemes.
+#'
+#' @param revenue_df Data frame. Output from calc_revenue()
+#'   containing revenue data across runs and scenarios
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Creates a line plot with:
+#' \itemize{
+#'   \item X-axis: Year
+#'   \item Y-axis: Total revenue ($)
+#'   \item Color by cap level
+#'   \item Line type by weight scheme
+#'   \item Facet by climate scenario
+#'   \item Shaded burn-in period
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_revenue(revenue_df)
+#' }
+plot_revenue <- function(revenue_df){
+  
+  # turn caps into factors for better plotting
+  revenue_df$cap <- as.character(revenue_df$cap)
+  revenue_df$cap[is.na(revenue_df$cap)] <- "No cap"
+  revenue_df$cap <- factor(revenue_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  # order weigths
+  revenue_df$wgts <- factor(revenue_df$wgts, levels = c("equal","binary","ramp"))
+  
+  
+  # Make palette
+  cap_col <- pnw_palette(name="Sunset2", n=length(unique(revenue_df$cap)), type="discrete")
+  
+  # Revenue time series plot
+  p <- revenue_df %>%
+    filter(Time > 0) %>%
+    ggplot(aes(x = Time/365, y = revenue, 
+               color = factor(cap), 
+               linetype = factor(wgts))) +
+    annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+             fill = "grey", alpha = 0.3) +
+    geom_line(linewidth = 0.8) +
+    scale_color_manual(values = cap_col) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    scale_y_continuous(limits = c(0, NA), labels = scales::dollar_format()) +
+    theme_bw() +
+    labs(
+      x = "Year", 
+      y = "Total revenue",
+      color = "Cap (mt)",
+      linetype = "Weight scheme",
+      title = "Total revenue from OY species"
+    ) +
+    facet_grid(~env)
+  
+  ggsave(paste0(plotdir, "/oy_revenue.png"), p, 
+         width = 10, height = 3,  
+         units = "in", dpi = 300)
+}
+
+#' Calculate Total Biomass for Lower Trophic Level Groups
+#'
+#' @description
+#' Calculates total biomass for specified lower trophic level groups
+#' (zooplankton, phytoplankton) from Atlantis model output.
+#'
+#' @param this_run Character. The run number/ID for the Atlantis model simulation
+#' @param groups Character vector. Codes of groups to extract 
+#'   (default c("EUP", "ZL", "ZM", "ZS", "PL", "PS"))
+#'
+#' @return Data frame containing:
+#'   \item{Time}{Time step from model output}
+#'   \item{Code}{Species/group code}
+#'   \item{biom_mt}{Total biomass in metric tons}
+#'   \item{run}{Run number}
+#'   \item{cap}{Cap level}
+#'   \item{wgts}{Weight scheme}
+#'   \item{env}{Climate scenario}
+#'
+#' @details
+#' Reads AgeBiomIndx.txt files, sums biomass across all age classes
+#' for specified groups. These are typically lower trophic level groups
+#' that don't require age-specific analysis.
+#'
+#' @examples
+#' \dontrun{
+#' ltl_biomass <- calc_ltl_biomass("2097")
+#' }
+calc_ltl_biomass <- function(this_run, groups = c("EUP", "ZL", "ZM", "ZS", "PL", "PS")){
+  
+  print(this_run)
+  
+  # File paths
+  wd <- "../v2"
+  biom_file <- paste0("outputGOA_", this_run, "AgeBiomIndx.txt")
+  
+  # Read biomass file
+  biom <- read.csv(paste(wd, biom_file, sep = "/"), sep = " ", header = T)
+  
+  # Force convert all columns except Time to numeric
+  biom <- biom %>%
+    mutate(across(-Time, ~as.numeric(as.character(.))))
+  
+  # Drop incomplete rows at the end
+  complete_rows_biom <- apply(biom[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+  last_complete_biom <- max(which(complete_rows_biom))
+  biom <- biom[1:last_complete_biom, ]
+  
+  # Subset to time range
+  biom <- biom %>% filter(Time/365 <= yr_end)
+  
+  # Convert to long format
+  biom_long <- biom %>%
+    pivot_longer(-Time, names_to = "Code.Age", values_to = "mt")
+  
+  # Split Code and Age
+  code_age_split <- strsplit(biom_long$Code.Age, "\\.", fixed = FALSE)
+  biom_long$Code <- sapply(code_age_split, `[`, 1)
+  biom_long$Age <- as.numeric(sapply(code_age_split, `[`, 2))
+  
+  # Filter to specified groups and sum across ages
+  biom_ltl <- biom_long %>%
+    filter(Code %in% groups) %>%
+    group_by(Time, Code) %>%
+    summarise(biom_mt = sum(mt, na.rm = TRUE), .groups = 'drop') %>%
+    mutate(run = this_run)
+  
+  # Add metadata from key_config
+  biom_ltl <- biom_ltl %>%
+    left_join(key_config, by = "run")
+  
+  return(biom_ltl)
+}
+
+#' Plot Total Biomass for Lower Trophic Level Groups
+#'
+#' @description
+#' Creates time series plots of total biomass for lower trophic level groups,
+#' faceted by group and climate scenario.
+#'
+#' @param ltl_df Data frame. Output from calc_ltl_biomass()
+#'   containing biomass data across runs and scenarios
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Creates a line plot with:
+#' \itemize{
+#'   \item X-axis: Year
+#'   \item Y-axis: Total biomass (mt)
+#'   \item Color by cap level
+#'   \item Line type by weight scheme
+#'   \item Facet by env (rows) × Code (columns)
+#'   \item Free y-axis scales (requires ggh4x package)
+#'   \item Shaded burn-in period
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_ltl_biomass(ltl_df)
+#' }
+plot_ltl_biomass <- function(ltl_df){
+  
+  # Make palette
+  cap_col <- pnw_palette(name="Sunset2", n=length(unique(ltl_df$cap)), type="discrete")
+  
+  # Get group names for better labels
+  ltl_df <- ltl_df %>%
+    left_join(grps %>% select(Code, Name), by = "Code")
+  
+  # Biomass time series plot
+  p <- ltl_df %>%
+    filter(Time > 0) %>%
+    ggplot(aes(x = Time/365, y = biom_mt, 
+               color = factor(cap), 
+               linetype = factor(wgts))) +
+    annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+             fill = "grey", alpha = 0.3) +
+    geom_line(linewidth = 0.6) +
+    scale_color_manual(values = cap_col) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    scale_y_continuous(limits = c(0, NA)) +
+    theme_bw() +
+    theme(
+      strip.text = element_text(size = 9)
+    ) +
+    labs(
+      x = "Year", 
+      y = "Biomass (mt)",
+      color = "Cap (mt)",
+      linetype = "Weight scheme",
+      title = "Lower trophic level biomass"
+    ) +
+    ggh4x::facet_grid2(env ~ Name, scales = "free_y", independent = "y")
+  
+  ggsave(paste0(plotdir, "/ltl_biomass.png"), p, 
+         width = 14, height = 6,  
+         units = "in", dpi = 300)
+}
+
+#' Extract Weight-at-Age from NetCDF Output
+#'
+#' @description
+#' Extracts abundance-weighted mean weight-at-age for specified functional groups
+#' from Atlantis NetCDF output files. Calculates weight from reserve and
+#' structural nitrogen pools weighted by spatial distribution of abundance.
+#'
+#' @param this_run Character. The run number/ID for the Atlantis model simulation
+#' @param sp_names Character vector. Species names to extract (e.g., c("Pollock", "Cod")).
+#'   Default is oy_names (all OY species names)
+#' @param boundary_boxes Numeric vector. Box IDs that are boundaries (0-indexed).
+#'   If provided, values in these boxes will be set to NA and excluded from calculations.
+#'   Default is NULL (no boundary box filtering)
+#'
+#' @return Data frame containing:
+#'   \item{year}{Year of simulation}
+#'   \item{age_group}{Age group identifier (e.g., "Pollock1_ResN")}
+#'   \item{age}{Numeric age}
+#'   \item{weight}{Weight in kg}
+#'   \item{Name}{Short species name}
+#'   \item{LongName}{Full species name}
+#'   \item{run}{Run number}
+#'   \item{cap}{Cap level}
+#'   \item{wgts}{Weight scheme}
+#'   \item{env}{Climate scenario}
+#'
+#' @details
+#' Reads reserve nitrogen (_ResN), structural nitrogen (_StructN), and
+#' numbers (_Nums) from NetCDF files. Calculates spatial abundance-weighted
+#' mean nitrogen content, then converts to weight in kg using the conversion:
+#' weight (kg) = totN * 20 * 5.7 / 1,000,000
+#' 
+#' If boundary_boxes is provided, sets values in those boxes to NA before
+#' calculations to exclude boundary effects from weight-at-age estimates.
+#'
+#' @examples
+#' \dontrun{
+#' # Without boundary box filtering
+#' waa_data <- calc_weight_at_age("2097")
+#' 
+#' # With boundary box filtering
+#' boundary_boxes <- c(0, 1, 2)  # Example boundary boxes (0-indexed)
+#' waa_data <- calc_weight_at_age("2097", boundary_boxes = boundary_boxes)
+#' }
+calc_weight_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = NULL){
+  
+  print(paste(this_run, "weight-at-age"))
+  
+  # File paths
+  wd <- "../v2"
+  ncfile <- paste0(wd, "/outputGOA_", this_run, ".nc")
+  
+  # Open file
+  this_nc <- nc_open(ncfile)
+  
+  # Get time
+  ts <- ncdf4::ncvar_get(this_nc, varid = "t") %>% as.numeric()
+  tyrs <- ts/(60*60*24*365)
+  
+  # Get all variable names
+  all_var_names <- names(this_nc$var)
+  
+  # Filter for reserve N, structural N, and numbers for specified species
+  # Pattern is: SpeciesName + digit(s) + _ResN (or _StructN or _Nums)
+  resN_vars <- all_var_names[sapply(sp_names, function(x) grepl(paste0("^", x, "[0-9]+_ResN$"), all_var_names)) %>% 
+                               apply(1, any)]
+  strucN_vars <- all_var_names[sapply(sp_names, function(x) grepl(paste0("^", x, "[0-9]+_StructN$"), all_var_names)) %>% 
+                                 apply(1, any)]
+  abun_vars <- all_var_names[sapply(sp_names, function(x) grepl(paste0("^", x, "[0-9]+_Nums$"), all_var_names)) %>% 
+                               apply(1, any)]
+  
+  if(length(resN_vars) == 0) {
+    nc_close(this_nc)
+    message(paste("No ResN data found for run", this_run, "with specified species"))
+    return(NULL)
+  }
+  
+  # Actually pull the data from the .nc
+  resN <- purrr::map(resN_vars, ncdf4::ncvar_get, nc = this_nc) 
+  strucN <- purrr::map(strucN_vars, ncdf4::ncvar_get, nc = this_nc)
+  nums <- purrr::map(abun_vars, ncdf4::ncvar_get, nc = this_nc) # numbers by age group, box, layer, time
+  
+  # Set boundary boxes to NA if provided
+  # Arrays are 3D with dimensions [layer, box, time]
+  if(!is.null(boundary_boxes)) {
+    # Convert 0-indexed to 1-indexed for R
+    boundary_idx <- boundary_boxes + 1
+    
+    # Set boundary boxes to NA in all arrays
+    resN <- purrr::map(resN, function(x) {
+      x[, boundary_idx, ] <- NA  # Box is the second dimension
+      return(x)
+    })
+    
+    strucN <- purrr::map(strucN, function(x) {
+      x[, boundary_idx, ] <- NA  # Box is the second dimension
+      return(x)
+    })
+    
+    nums <- purrr::map(nums, function(x) {
+      x[, boundary_idx, ] <- NA  # Box is the second dimension
+      return(x)
+    })
+  }
+  
+  # Calculate total numbers and relative numbers
+  totnums <- nums %>% purrr::map(apply, MARGIN = 3, FUN = sum, na.rm = TRUE) # total numbers by age group, time
+  relnums <- purrr::map2(nums, totnums, sweep, MARGIN = 3, FUN = `/`) # divide nums by totnums along the time axis
+  
+  # Add the two matrices to get total nitrogen weight
+  rnsn <- purrr::map2(resN, strucN, `+`)
+  
+  # Multiply and sum to get abundance-weighted mean weight at age
+  rnsn_summ <- purrr::map2(rnsn, relnums, `*`) %>% 
+    purrr::map(apply, MARGIN = 3, FUN = sum, na.rm = TRUE) %>% # mean total N by time (na.rm added)
+    bind_cols() %>% # bind age groups elements together
+    suppressMessages() %>% 
+    set_names(resN_vars) %>% 
+    mutate(t = tyrs) %>%
+    # pivot to long form
+    pivot_longer(cols = -t, names_to = 'age_group', values_to = 'totN') %>%
+    mutate(age = parse_number(age_group)) %>% 
+    mutate(weight = totN * 20 * 5.7 / 1000000) %>%   # convert totN to weight/individual in kg
+    dplyr::filter(t > 0) %>%
+    mutate(year = t) %>%
+    group_by(year, age_group, age) %>%
+    summarise(weight = mean(weight), .groups = 'drop') %>%
+    ungroup() %>%
+    mutate(Name = gsub('[0-9]+_ResN', '', age_group)) %>%
+    left_join(grps %>% dplyr::select(Name, LongName), by = 'Name') %>%
+    mutate(run = this_run)
+  
+  # Close the netCDF file
+  nc_close(this_nc)
+  
+  # Add metadata from key_config
+  rnsn_summ <- rnsn_summ %>%
+    left_join(key_config, by = "run")
+  
+  return(rnsn_summ)
+}
+
+#' Plot Weight-at-Age Heatmaps as Ratios to NoClimate
+#'
+#' @description
+#' Creates heatmaps showing the ratio of weight-at-age under climate scenarios
+#' relative to the NoClimate baseline, averaged over the last 5 years.
+#'
+#' @param waa_df Data frame. Output from calc_weight_at_age()
+#'   containing weight-at-age data across runs and scenarios
+#' @param cap_filter Numeric or NULL. Cap value to filter to (default NULL for all caps)
+#' @param wgts_filter Character. Weight scheme to filter to (default "equal")
+#' @param sp_names_filter Character vector. Species names to include 
+#'   (default NULL for all species in data)
+#' @param n_years Numeric. Number of final years to average (default 5)
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Filters to the last n_years (using integer years only - Jan 1 values),
+#' calculates mean weight-at-age, and computes ratios of climate scenarios
+#' (ssp126, ssp245, ssp585) relative to NoClimate baseline.
+#' 
+#' Heatmap shows:
+#' \itemize{
+#'   \item Rows: Species (LongName)
+#'   \item Columns: Age class
+#'   \item Color: Ratio (climate scenario / NoClimate)
+#'   \item Facets: Cap (rows) × Climate scenario (columns)
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_waa_heatmap(waa_all)
+#' plot_waa_heatmap(waa_all, sp_names_filter = c("Pollock", "Cod"))
+#' plot_waa_heatmap(waa_all, cap_filter = 4e+05)
+#' }
+plot_waa_heatmap <- function(waa_df, 
+                             cap_filter = NULL,
+                             wgts_filter = "equal",
+                             sp_names_filter = NULL,
+                             n_years = 5){
+  
+  # Filter to integer years (Jan 1 values) and weight scheme
+  waa_filtered <- waa_df %>%
+    mutate(year_int = floor(year)) %>%
+    filter(year == year_int) %>%  # Keep only integer year values
+    filter(wgts == wgts_filter)
+  
+  # Filter to specific cap if requested
+  if(!is.null(cap_filter)) {
+    waa_filtered <- waa_filtered %>%
+      filter(cap == cap_filter)
+  }
+  
+  # Filter to specific species if requested
+  if(!is.null(sp_names_filter)) {
+    waa_filtered <- waa_filtered %>%
+      filter(Name %in% sp_names_filter)
+  }
+  
+  # Get the last n years
+  max_year <- max(waa_filtered$year_int, na.rm = TRUE)
+  min_year <- max_year - n_years + 1
+  
+  # Filter to last n years and calculate means
+  waa_5y <- waa_filtered %>%
+    filter(year_int >= min_year) %>%
+    group_by(Name, LongName, age, env, cap) %>%
+    summarise(weight_mean = mean(weight, na.rm = TRUE), .groups = 'drop')
+  
+  # Separate NoClimate as baseline
+  waa_baseline <- waa_5y %>%
+    filter(env == "NoClimate") %>%
+    select(Name, LongName, age, cap, weight_baseline = weight_mean)
+  
+  # Join with climate scenarios and calculate ratios
+  waa_ratios <- waa_5y %>%
+    filter(env != "NoClimate") %>%
+    left_join(waa_baseline, by = c("Name", "LongName", "age", "cap")) %>%
+    mutate(ratio = weight_mean / weight_baseline,
+           percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
+  
+  # Check if we have data
+  if(nrow(waa_ratios) == 0) {
+    message("No data to plot after filtering")
+    return(NULL)
+  }
+  
+  # Create labels for scenarios
+  env_labs <- c('ssp126' = 'SSP1-2.6',
+                'ssp245' = 'SSP2-4.5', 
+                'ssp585' = 'SSP5-8.5')
+  
+  # Create heatmap
+  p <- waa_ratios %>%
+    ggplot() +
+    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
+                                                 oob = scales::squish) + 
+    theme_bw() +
+    scale_x_continuous(breaks = seq(1, max(waa_ratios$age, na.rm = TRUE))) +
+    labs(x = 'Age class', 
+         y = '', 
+         fill = '% change\nfrom\nNoClimate',
+         title = paste0('Relative change in weight-at-age (', wgts_filter, ' weights)')) +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          strip.text = element_text(size = 10)) +
+    facet_grid(cap ~ env, labeller = labeller(env = env_labs))
+  
+  # Create filename suffix
+  sp_suffix <- if(!is.null(sp_names_filter)) {
+    paste0("_", paste(sp_names_filter, collapse = "_"))
+  } else {
+    ""
+  }
+  
+  cap_suffix <- if(!is.null(cap_filter)) {
+    cap_str <- paste(as.character(cap_filter), collapse = "_")
+    cap_str <- gsub("\\+", "", cap_str)
+    paste0("_cap", cap_str)
+  } else {
+    ""
+  }
+  
+  ggsave(paste0(plotdir, "/waa_heatmap_", wgts_filter, cap_suffix, sp_suffix, ".png"), 
+         p, 
+         width = 10, 
+         height = ( length(unique(waa_ratios$cap)) * length(unique(waa_ratios$LongName)) * 0.75), 
+         units = "in", dpi = 300)
+  
+  # Return the data for inspection if needed
+  invisible(waa_ratios)
+}
+
+#' Extract Numbers-at-Age from NetCDF Output
+#'
+#' @description
+#' Extracts total numbers-at-age for specified functional groups
+#' from Atlantis NetCDF output files by summing across spatial boxes.
+#'
+#' @param this_run Character. The run number/ID for the Atlantis model simulation
+#' @param sp_names Character vector. Species names to extract (e.g., c("Pollock", "Cod")).
+#'   Default is oy_names (all OY species names)
+#' @param boundary_boxes Numeric vector. Box IDs that are boundaries (0-indexed).
+#'   If provided, values in these boxes will be set to NA and excluded from calculations.
+#'   Default is NULL (no boundary box filtering)
+#'
+#' @return Data frame containing:
+#'   \item{year}{Year of simulation}
+#'   \item{age_group}{Age group identifier (e.g., "Pollock1_Nums")}
+#'   \item{age}{Numeric age}
+#'   \item{abun}{Total abundance (numbers)}
+#'   \item{Name}{Short species name}
+#'   \item{LongName}{Full species name}
+#'   \item{run}{Run number}
+#'   \item{cap}{Cap level}
+#'   \item{wgts}{Weight scheme}
+#'   \item{env}{Climate scenario}
+#'
+#' @details
+#' Reads numbers (_Nums) from NetCDF files and sums across spatial boxes
+#' (excluding boundary boxes if specified) to get total abundance-at-age
+#' over time.
+#'
+#' @examples
+#' \dontrun{
+#' # Without boundary box filtering
+#' naa_data <- calc_numbers_at_age("2097")
+#' 
+#' # With boundary box filtering
+#' boundary_boxes <- c(0, 1, 2)  # Example boundary boxes (0-indexed)
+#' naa_data <- calc_numbers_at_age("2097", boundary_boxes = boundary_boxes)
+#' }
+calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = NULL){
+  
+  print(paste(this_run, "numbers-at-age"))
+  
+  # File paths
+  wd <- "../v2"
+  ncfile <- paste0(wd, "/outputGOA_", this_run, ".nc")
+  
+  # Open file
+  this_nc <- nc_open(ncfile)
+  
+  # Get time
+  ts <- ncdf4::ncvar_get(this_nc, varid = "t") %>% as.numeric()
+  tyrs <- ts/(60*60*24*365)
+  
+  # Get all variable names
+  all_var_names <- names(this_nc$var)
+  
+  # Filter for numbers for specified species
+  # Pattern is: SpeciesName + digit(s) + _Nums
+  abun_vars <- all_var_names[sapply(sp_names, function(x) grepl(paste0("^", x, "[0-9]+_Nums$"), all_var_names)) %>% 
+                               apply(1, any)]
+  
+  if(length(abun_vars) == 0) {
+    nc_close(this_nc)
+    message(paste("No Nums data found for run", this_run, "with specified species"))
+    return(NULL)
+  }
+  
+  # Actually pull the data from the .nc
+  nums <- purrr::map(abun_vars, ncdf4::ncvar_get, nc = this_nc) # numbers by layer, box, time
+  
+  # Set boundary boxes to NA if provided
+  # Arrays are 3D with dimensions [layer, box, time]
+  if(!is.null(boundary_boxes)) {
+    # Convert 0-indexed to 1-indexed for R
+    boundary_idx <- boundary_boxes + 1
+    
+    # Set boundary boxes to NA in all arrays
+    nums <- purrr::map(nums, function(x) {
+      x[, boundary_idx, ] <- NA  # Box is the second dimension
+      return(x)
+    })
+  }
+  
+  # Sum across space (layers and boxes) for each time point
+  abun_summ <- nums %>% 
+    purrr::map(apply, MARGIN = 3, FUN = sum, na.rm = TRUE) %>% 
+    bind_cols() %>% 
+    suppressMessages() %>% 
+    set_names(abun_vars) %>% 
+    mutate(t = tyrs) %>%
+    # pivot to long form
+    pivot_longer(cols = -t, names_to = 'age_group', values_to = 'abun') %>%
+    mutate(age = parse_number(age_group)) %>%
+    mutate(year = t) %>%
+    group_by(year, age_group, age) %>%
+    summarise(abun = mean(abun), .groups = 'drop') %>%
+    ungroup() %>%
+    mutate(Name = gsub('[0-9]+_Nums', '', age_group)) %>%
+    left_join(grps %>% dplyr::select(Name, LongName), by = 'Name') %>%
+    mutate(run = this_run)
+  
+  # Close the netCDF file
+  nc_close(this_nc)
+  
+  # Add metadata from key_config
+  abun_summ <- abun_summ %>%
+    left_join(key_config, by = "run")
+  
+  return(abun_summ)
+}
+
+#' Plot Numbers-at-Age Heatmaps as Ratios to NoClimate
+#'
+#' @description
+#' Creates heatmaps showing the ratio of numbers-at-age under climate scenarios
+#' relative to the NoClimate baseline, averaged over the last 5 years.
+#'
+#' @param naa_df Data frame. Output from calc_numbers_at_age()
+#'   containing numbers-at-age data across runs and scenarios
+#' @param cap_filter Numeric or NULL. Cap value to filter to (default NULL for all caps)
+#' @param wgts_filter Character. Weight scheme to filter to (default "equal")
+#' @param sp_names_filter Character vector. Species names to include 
+#'   (default NULL for all species in data)
+#' @param n_years Numeric. Number of final years to average (default 5)
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Filters to the last n_years (using integer years only - Jan 1 values),
+#' calculates mean numbers-at-age, and computes ratios of climate scenarios
+#' (ssp126, ssp245, ssp585) relative to NoClimate baseline.
+#' 
+#' Heatmap shows:
+#' \itemize{
+#'   \item Rows: Species (LongName)
+#'   \item Columns: Age class
+#'   \item Color: Percent change (climate scenario / NoClimate)
+#'   \item Facets: Cap (rows) × Climate scenario (columns)
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_naa_heatmap(naa_all)
+#' plot_naa_heatmap(naa_all, sp_names_filter = c("Pollock", "Cod"))
+#' plot_naa_heatmap(naa_all, cap_filter = 4e+05)
+#' }
+plot_naa_heatmap <- function(naa_df, 
+                             cap_filter = NULL,
+                             wgts_filter = "equal",
+                             sp_names_filter = NULL,
+                             n_years = 5){
+  
+  # Filter to integer years (Jan 1 values) and weight scheme
+  naa_filtered <- naa_df %>%
+    mutate(year_int = floor(year)) %>%
+    filter(year == year_int) %>%  # Keep only integer year values
+    filter(wgts == wgts_filter)
+  
+  # Filter to specific cap if requested
+  if(!is.null(cap_filter)) {
+    naa_filtered <- naa_filtered %>%
+      filter(cap == cap_filter)
+  }
+  
+  # Filter to specific species if requested
+  if(!is.null(sp_names_filter)) {
+    naa_filtered <- naa_filtered %>%
+      filter(Name %in% sp_names_filter)
+  }
+  
+  # Get the last n years
+  max_year <- max(naa_filtered$year_int, na.rm = TRUE)
+  min_year <- max_year - n_years + 1
+  
+  # Filter to last n years and calculate means
+  naa_5y <- naa_filtered %>%
+    filter(year_int >= min_year) %>%
+    group_by(Name, LongName, age, env, cap) %>%
+    summarise(abun_mean = mean(abun, na.rm = TRUE), .groups = 'drop')
+  
+  # Separate NoClimate as baseline
+  naa_baseline <- naa_5y %>%
+    filter(env == "NoClimate") %>%
+    select(Name, LongName, age, cap, abun_baseline = abun_mean)
+  
+  # Join with climate scenarios and calculate ratios
+  naa_ratios <- naa_5y %>%
+    filter(env != "NoClimate") %>%
+    left_join(naa_baseline, by = c("Name", "LongName", "age", "cap")) %>%
+    mutate(ratio = abun_mean / abun_baseline,
+           percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
+  
+  # Check if we have data
+  if(nrow(naa_ratios) == 0) {
+    message("No data to plot after filtering")
+    return(NULL)
+  }
+  
+  # Create labels for scenarios
+  env_labs <- c('ssp126' = 'SSP1-2.6',
+                'ssp245' = 'SSP2-4.5', 
+                'ssp585' = 'SSP5-8.5')
+  
+  # Create heatmap
+  p <- naa_ratios %>%
+    ggplot() +
+    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
+                                                 oob = scales::squish) + 
+    theme_bw() +
+    scale_x_continuous(breaks = seq(1, max(naa_ratios$age, na.rm = TRUE))) +
+    labs(x = 'Age class', 
+         y = '', 
+         fill = '% change\nfrom\nNoClimate',
+         title = paste0('Relative change in numbers-at-age (', wgts_filter, ' weights)')) +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          strip.text = element_text(size = 10)) +
+    facet_grid(cap ~ env, labeller = labeller(env = env_labs))
+  
+  # Create filename suffix
+  sp_suffix <- if(!is.null(sp_names_filter)) {
+    paste0("_", paste(sp_names_filter, collapse = "_"))
+  } else {
+    ""
+  }
+  
+  cap_suffix <- if(!is.null(cap_filter)) {
+    cap_str <- paste(as.character(cap_filter), collapse = "_")
+    cap_str <- gsub("\\+", "", cap_str)
+    paste0("_cap", cap_str)
+  } else {
+    ""
+  }
+  
+  ggsave(paste0(plotdir, "/naa_heatmap_", wgts_filter, cap_suffix, sp_suffix, ".png"), 
+         p, 
+         width = 10, 
+         height = ( length(unique(naa_ratios$cap)) * length(unique(naa_ratios$LongName)) * 0.75), 
+         units = "in", dpi = 300)
+  
+  # Return the data for inspection if needed
+  invisible(naa_ratios)
 }

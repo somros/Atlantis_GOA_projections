@@ -17,7 +17,7 @@ rm(list = ls())
 # set path for reference run
 ref_run <- "000" # check that this makes sense
 oy_dir <- "AtlantisGOA_MS/"
-output_dir <- "../v1"
+output_dir <- "../v2"
 
 # source functions script
 source("functions.R")
@@ -29,10 +29,12 @@ biom <- read.csv(biom_file, sep = " ", header = T)
 yr_end <- ceiling(max(unique(biom$Time)))/365 # 110
 
 # identify boundary boxes - will need this for NAA extraction
+# TODO: this can't be run on the server now, problem with rbgm
 # fl <- 'data/GOA_WGS84_V4_final.bgm'
 # bgm <- rbgm::read_bgm(fl)
 # goa_sf <- rbgm::box_sf(bgm)
 # boundary_boxes <- goa_sf %>% sf::st_set_geometry(NULL) %>% filter(boundary == TRUE) %>% pull(box_id) # get boundary boxes
+boundary_boxes <- c(0, 2, 8, 11, 30, 53, 58, 62, 69, 81, 89, 95, 97, 108)
 
 # read in species info
 grps <- read.csv("data/GOA_Groups.csv")
@@ -78,14 +80,45 @@ pref <- data.frame("Code" = oy_species) %>%
 # }
 # estbo_key <- bind_rows(estbo_list) %>% select(Code, mean_biom) %>% rename(estbo = mean_biom)
 
-ref_points_ss <- read.csv("output/ref_points_from_SS_runs_oct2025.csv")
+ref_points_ss <- read.csv("output/ref_points_from_SS_runs_nov2025.csv")
 estbo_key <- ref_points_ss %>% select(Code, b0) %>% rename(estbo = b0)
 
 # need to get fref
 # the value in the prm is an input that may or may not be close
-# for HCR species, get from reference points
+# for HCR species, get from reference points. THOSE ARE MU, so turn to F
+fref_frame <- ref_points_ss %>%
+  select(Code, fref) %>%
+  mutate(fref = -log(1 - fref)) %>%
+  filter(Code != "HAL") %>%
+  drop_na()
+
+# NB: 11/04/2025
+# An error in the parametrization of the first MS batch caused Fref to be off for the HCR species.
+# basically I left the mfcchange_mult on for the HCR species, thinking that the HCR would overwrite that
+# it did not. mfc, after the hcr, would get multiplied by that factor
+# this caused the HCR to be off. way off for COD
+# for the purpose of plotting relative to Fref, multiply Fref by the mult factors
+# TODO: drop this when we fix that in future runs
+
+# mult_df <- data.frame("Code" = c("POL", "COD", "POP", "SBF"),
+#                       mult = c(1.06868, 2.67137, 1.22662, 0.84828))
+# fref_frame <- fref_frame %>%
+#   left_join(mult_df, by = "Code") %>%
+#   mutate(fref = fref * mult) %>%
+#   select(-mult)
+
+# NB: this is a hack purely for plotting purpose to see if the HCR works - catch is all off
 
 # for others, need to get it from external analysis of recent F
+fref_other <- read.csv("data/fref_from_assessments_proj.csv") %>%
+  filter(!Code %in% fref_frame$Code) %>%
+  select(Code, `F`) %>%
+  rename(fref = `F`)
+
+fref_frame <- rbind(fref_frame, 
+                    fref_other,
+                    data.frame("Code" = "DFS", # handle DFS but we'll need something else
+                               fref = NA))
 
 ##############################################################
 # biology information
@@ -128,7 +161,7 @@ POL_predators <- diet %>%
 ##############################################################
 # make a directory to store plots
 # make a plot directory
-plotdir <- paste0("plots/oy/", Sys.Date())
+plotdir <- paste0("plots/oy/",  format(Sys.time(), "%Y-%m-%d_%H-%M-%S"))
 if(!dir.exists(plotdir)){
   dir.create(plotdir, recursive = T)
 } else {
@@ -145,7 +178,7 @@ key_config <- run_combs %>%
   mutate(env = gsub (".prm", "", gsub("GOA_force_", "", force_file))) %>% # climate scenario
   mutate(cap = cap * 1000, # transform to tons
          run_id = sprintf("%03d", run_id), # run as character
-         env = ifelse(env == "GOA_force", "Constant", env)) %>%
+         env = ifelse(env == "GOA_force", "NoClimate", env)) %>%
   select(run_id, cap, weights, env) %>%
   rename(run = run_id, # naming consistency
          wgts = weights)
@@ -165,9 +198,12 @@ catch_df <- catch_df_tmp %>%
 # turn caps into factors for better plotting
 catch_df$cap <- as.character(catch_df$cap)
 catch_df$cap[is.na(catch_df$cap)] <- "No cap"
+catch_df$cap <- factor(catch_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
 
 # order weigths
 catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","ramp"))
+
+# discard the very first time step, because catch=0 then and it makes the plots misleading
 
 # get preferred species given a certain weighting scheme
 # using > mean(w) here in an attempt to automate the choice
@@ -206,7 +242,7 @@ for(i in 1:length(oy_species)){
   current_name <- grps %>% filter(Code == current_code) %>% pull(Name)
   
   p6 <- h_plot %>%
-    filter(Time >= burnin) %>%
+    filter(Time >= burnin + 5) %>%
     filter(Name == current_name) %>%
     ggplot(aes(x = f, y = H, color = Time, shape = wgts))+
     geom_point(aes(shape = factor(wgts)), size = 1)+
@@ -235,7 +271,7 @@ diets_pol_pred <- bind_rows(lapply(run, get_polprop))
 diet_key <- catch_df %>%
   filter(!is.na(f), Code == "POL") %>%
   mutate(Time = Time/365) %>%
-  select(Time,f,run,cap,wgts,env,other)
+  select(Time,f,run,cap,wgts,env)
 
 diet_plot <- diets_pol_pred %>%
   left_join(diet_key, by = c("Time","run")) %>%
@@ -247,12 +283,16 @@ for(i in 1:length(unique(POL_predators$Predator))){
   current_name <- grps %>% filter(Code == current_code) %>% pull(Name)
   
   p7 <- diet_plot %>%
-    filter(Time >= burnin) %>%
+    #filter(Time >= burnin) %>%
+    filter(Time > 5) %>%
     filter(Predator == current_code) %>%
     ggplot(aes(x = Time, y = POL, color = f, shape = wgts))+
+    annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+             fill = "grey", alpha = 0.3) +
     geom_point(aes(shape = factor(wgts)), size = 1)+
     scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     scale_color_viridis_c(option = "cividis")+
+    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     #scale_y_continuous(limits = c(0,NA))+
     theme_bw()+
     labs(x = "Year", 
@@ -270,3 +310,79 @@ for(i in 1:length(unique(POL_predators$Predator))){
 
 # NB: at the moment there is a pervasive time series effect that is masking most of these plots
 # This is tied to the climate scenario to an extent, but it's also just POL declining over time in the base model
+
+
+# Ecosystem indicators ----------------------------------------------------
+
+# Calculate indicators for all runs (with progress)
+indicators_all <- map_df(run, ~{
+  cat("Processing run", .x, "\n")
+  calc_ecosystem_indicators(.x)
+})
+
+# Create plots
+plot_ecosystem_indicators(indicators_all)
+
+# Single specific scenario
+# I do not think these plots are effective
+# plot_ecosystem_indicators_radar(indicators_all, 
+#                                 cap_filter = 4e+05, 
+#                                 env_filter = "ssp585", 
+#                                 decade_filter = 3)
+# 
+# # All decades for one cap and env (3 plots in a row)
+# plot_ecosystem_indicators_radar(indicators_all, 
+#                                 cap_filter = 4e+05, 
+#                                 env_filter = "NoClimate")
+# 
+# # Compare environments for one cap and decade (2 plots)
+# plot_ecosystem_indicators_radar(indicators_all, 
+#                                 cap_filter = 4e+05, 
+#                                 decade_filter = 9)
+
+
+# Economic indicators -----------------------------------------------------
+
+# Load price data
+price_dat <- read.csv("data/price.csv")
+
+# For all runs
+all_runs <- key_config %>% pull(run)
+
+revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
+
+# Create plot
+plot_revenue(revenue_all)
+
+
+# LTL ---------------------------------------------------------------------
+
+ltl_biomass_all <- map_df(run, calc_ltl_biomass, groups = c("EUP", "ZL", "ZM", "PL", "PAN", "PWN"))
+
+# Create plot
+plot_ltl_biomass(ltl_biomass_all)
+
+# WAA ---------------------------------------------------------------------
+
+# this takes time
+
+# For all runs with specific species
+these_names <- c("Pollock", "Cod", "Arrowtooth_flounder", "Sablefish", "Pacific_ocean_perch" )
+# waa_pollock <- map_df(run, ~calc_weight_at_age(.x, sp_names = "Pollock"))
+waa_core <- map_df(run, ~calc_weight_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
+
+# plot
+# For all species at default cap (8e+05)
+# plot_waa_heatmap(waa_pollock)
+plot_waa_heatmap(waa_core,
+                 cap_filter = 8e+05)
+
+# NAA ---------------------------------------------------------------------
+
+naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
+
+# plot
+# For all species at default cap (8e+05)
+# plot_waa_heatmap(waa_pollock)
+plot_naa_heatmap(naa_core %>% filter(Name != "Cod"),
+                 cap_filter = 8e+05)
