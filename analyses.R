@@ -173,6 +173,9 @@ if(!dir.exists(plotdir)){
 run_combs <- read.csv("AtlantisGOA_MS/atlantis_run_combinations.csv")
 run <- run_combs %>% pull(run_id) %>% sprintf("%03d", .)
 
+# rename "ramp" to "attainment-based" which is more informative
+run_combs$weights <- gsub("ramp", "attainment-based", run_combs$weights)
+
 # format this consistently with the key used before to limit changes to the code below
 key_config <- run_combs %>% 
   mutate(env = gsub (".prm", "", gsub("GOA_force_", "", force_file))) %>% # climate scenario
@@ -201,7 +204,7 @@ catch_df$cap[is.na(catch_df$cap)] <- "No cap"
 catch_df$cap <- factor(catch_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
 
 # order weigths
-catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","ramp"))
+catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","attainment-based"))
 
 # discard the very first time step, because catch=0 then and it makes the plots misleading
 
@@ -223,7 +226,11 @@ catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","ramp"))
 
 # Apply function to produce fishery plots -------------------------------------------------------------------
 
-plot_fishery(catch_df)
+plot_fishery(catch_df %>% filter(wgts != "binary"))
+
+# Catch delta -------------------------------------------------------------
+
+plot_catch_delta(catch_df)
 
 # Shannon Index -----------------------------------------------------------
 h_frame <- data.frame() # initialize df

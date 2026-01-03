@@ -327,8 +327,8 @@ plot_fishery <- function(catch_df){
               biom_tot = sum(biom_mt_selex)) %>%
     ungroup() %>%
     pivot_longer(-c(Time:env)) %>%
-    ggplot(aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts)))+
-    annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+    ggplot(aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts)))+
+    annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
              fill = "grey", alpha = 0.3) +
     geom_line(linewidth = 0.5)+
     scale_color_manual(values = cap_col)+
@@ -337,7 +337,9 @@ plot_fishery <- function(catch_df){
     geom_hline(aes(yintercept = as.numeric(as.character(cap))), linetype = "dashed", linewidth = 0.25)+
     #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     theme_bw()+
+    scale_x_continuous(breaks = c(seq(1990,2100,10)))+
     scale_y_continuous(limits = c(0,NA))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
     labs(x = "Year", 
          y = "mt",
          color = "Cap (mt)",
@@ -366,13 +368,20 @@ plot_fishery <- function(catch_df){
       dplyr::select(-c(fref, f, biom_mt_tot, biom_mt_selex, mu, w_id)) %>%
       pivot_longer(-c(Time, Code, Name, run, cap, wgts, env))
     
-    p_tmp <- ggplot(data = p_df, aes(x = Time/365, y = value, color = factor(cap), linetype = factor(wgts))) +
-      annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
+    # drop the f_frac panel, redundant with the OY rescale panel mostly and we have the HCR information in the dedicated plots
+    p_df <- p_df %>% filter(name != "f_frac")
+    
+    p_tmp <- ggplot(data = p_df, aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts))) +
+      annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
                fill = "grey", alpha = 0.3) +
       geom_line(linewidth = 0.5) +
       scale_color_manual(values = cap_col)+
       scale_linetype_manual(values = c("solid","dashed","dotted"))+
+      scale_x_continuous(breaks = c(seq(1990,2100,10))) +
       scale_y_continuous(limits = c(0,NA)) +
+      geom_hline(data = data.frame(name = "biom_frac", 
+                                   env = unique(catch_df$env)),
+                 aes(yintercept = 1), linetype = "dotted") +
       {if(oy_species[i] %in% hcr_spp) 
         geom_hline(data = data.frame(name = "biom_frac", 
                                      env = unique(catch_df$env)),
@@ -388,7 +397,8 @@ plot_fishery <- function(catch_df){
            y = "",
            color = "Cap (mt)",
            linetype = "Weight scheme") +
-      theme_bw()
+      theme_bw() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
     ggsave(paste0(plotdir, "/by_spp/", current_code, ".png"), p_tmp, 
            width = 10, height = 4.5,  
@@ -408,7 +418,7 @@ plot_fishery <- function(catch_df){
     p2 <- catch_df %>%
       filter(Time >= (burnin + 5)*365) %>%
       filter(Code == current_code, !is.na(catch_mt)) %>%
-      ggplot(aes(x = biom_frac, y = f/fref, color = Time/365))+
+      ggplot(aes(x = biom_frac, y = f/fref, color = (Time/365)+1990))+
       geom_point(aes(shape = factor(wgts)), size = 1)+
       scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
       scale_color_viridis_c(option = "viridis")+
@@ -451,14 +461,13 @@ plot_fishery <- function(catch_df){
     )
   
   # Then compute biomass totals and join
-  # I am unsure this plot is useful
   p3 <- catch_df %>%
     filter(Time >= burnin*365) %>%
     filter(!is.na(catch_mt)) %>%
     group_by(Time, run, cap, wgts, env) %>%
     summarise(biom_mt_tot = sum(biom_mt_tot), .groups = 'drop') %>%
     mutate(decade = floor(Time/365/10)) %>%  # Create decade variable
-    filter(decade %in% c(3, 10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
+    filter(decade %in% c(3,10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
     group_by(decade, run, cap, wgts, env) %>%
     summarise(
       biom_mt_tot_mean = mean(biom_mt_tot),
@@ -485,7 +494,11 @@ plot_fishery <- function(catch_df){
          shape = "Weight scheme",
          title = "Catch-biomass tradeoff") +
     theme_bw() +
-    facet_grid(env ~ decade)
+    facet_grid(env ~ decade, 
+               labeller = labeller(decade = as_labeller(
+                 c("3" = "2020-2029", 
+                   "10" = "2090-2099")
+               )))
   
   ggsave(paste0(plotdir, "/", "catch_vs_biomass.png"), p3, 
          width = 8, height = 4.5, 
@@ -509,18 +522,64 @@ plot_fishery <- function(catch_df){
     left_join(atf) %>%
     mutate(f_ratio = f_atf / f_pol)
   
-  p4 <- pol_vs_atf %>%
+  # p4 <- pol_vs_atf %>%
+  #   filter(Time >= burnin*365) %>%
+  #   filter(!is.na(f_ratio)) %>%
+  #   filter(Time %in% (seq(0,yr_end,10)*365)) %>% # thin out
+  #   ggplot(aes(x = biom_atf, y = biom_pol, color = f_ratio, shape = factor(wgts)))+
+  #   geom_line(aes(group = interaction(Time, cap)), size = 0.5) +
+  #   geom_point(aes(shape = factor(wgts)), size = 1.5)+
+  #   geom_text(data = . %>% filter(wgts == "equal"), 
+  #             aes(label = Time / 365), 
+  #             nudge_x = -0.025, nudge_y = 0.025, 
+  #             size = 2.5, color = "black", 
+  #             check_overlap = F) +
+  #   scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
+  #   viridis::scale_color_viridis(option = "cividis", begin = 0.05, end = 0.95)+
+  #   theme_bw()+
+  #   # scale_x_continuous(limits = c(0,NA))+
+  #   # scale_y_continuous(limits = c(0,NA))+
+  #   labs(x = "Arrowtooth B/B0",
+  #        y = "Pollock B/B0",
+  #        shape = "Weight scheme",
+  #        color = "F(atf) / F(pol)",
+  #        title = "Pollock-arrowtooth tradeoffs")+
+  #   facet_grid(env~factor(cap))
+  
+  # alternative version
+  catch_df %>%
     filter(Time >= burnin*365) %>%
-    filter(!is.na(f_ratio)) %>%
-    filter(Time %in% (seq(0,yr_end,10)*365)) %>% # thin out
-    ggplot(aes(x = biom_atf, y = biom_pol, color = f_ratio, shape = factor(wgts)))+
-    geom_line(aes(group = interaction(Time, cap)), size = 0.5) +
+    filter(!is.na(catch_mt)) %>%
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(biom_mt_tot = sum(biom_mt_tot), .groups = 'drop') %>%
+    mutate(decade = floor(Time/365/10)) %>%  # Create decade variable
+    filter(decade %in% c(3,10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
+    group_by(decade, run, cap, wgts, env) %>%
+    summarise(
+      biom_mt_tot_mean = mean(biom_mt_tot),
+      biom_mt_tot_sd = sd(biom_mt_tot),
+      .groups = 'drop'
+    )
+  
+  p4 <- pol_vs_atf %>%
+    filter(Time >= burnin*365, !is.na(f_ratio)) %>%
+    mutate(decade = floor(Time/365/10)) %>%
+    filter(decade %in% c(3, 10)) %>%
+    group_by(decade, run, cap, wgts, env) %>%
+    summarise(across(c(biom_pol, f_pol, biom_atf, f_atf, f_ratio),
+                     list(mean = mean, sd = sd),
+                     .names = "{.col}_{.fn}"),
+              .groups = 'drop') %>%
+    filter(cap == "2e+05") %>%
+    ggplot(aes(x = biom_atf_mean, y = biom_pol_mean, color = f_atf_mean, shape = factor(wgts)))+
+    geom_errorbar(aes(ymin = biom_pol_mean - biom_pol_sd, 
+                      ymax = biom_pol_mean + biom_pol_sd), 
+                  width = 0.02, alpha = 0.5) +
+    geom_errorbarh(aes(xmin = biom_atf_mean - biom_atf_sd, 
+                       xmax = biom_atf_mean + biom_atf_sd), 
+                   height = 0.02, alpha = 0.5) +
+    geom_line(aes(group = interaction(decade, cap))) +
     geom_point(aes(shape = factor(wgts)), size = 1.5)+
-    geom_text(data = . %>% filter(wgts == "equal"), 
-              aes(label = Time / 365), 
-              nudge_x = -0.025, nudge_y = 0.025, 
-              size = 2.5, color = "black", 
-              check_overlap = F) +
     scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     viridis::scale_color_viridis(option = "cividis", begin = 0.05, end = 0.95)+
     theme_bw()+
@@ -529,9 +588,14 @@ plot_fishery <- function(catch_df){
     labs(x = "Arrowtooth B/B0",
          y = "Pollock B/B0",
          shape = "Weight scheme",
-         color = "F(atf) / F(pol)",
+         color = "F(atf)",
          title = "Pollock-arrowtooth tradeoffs")+
-    facet_grid(env~factor(cap))
+    facet_grid(env ~ decade, 
+               labeller = labeller(decade = as_labeller(
+                 c("3" = "2020-2029", 
+                   "10" = "2090-2099")
+               )))
+
   
   ggsave(paste0(plotdir, "/pol_vs_atf.png"), p4, 
          width = 10, height = 5, 
@@ -540,55 +604,137 @@ plot_fishery <- function(catch_df){
   # plot quantities relative to reference points and ecosystem indicators
   # some of these are repeated from the time series graphs so probably can do away with this plot, but it makes you compare species
   # summarize for early and late period to simplify the time dimension
-  ecoind_df_tmp <- catch_df %>%
+  # ecoind_df_tmp <- catch_df %>%
+  #   filter(!is.na(catch_mt)) %>%
+  #   rowwise() %>%
+  #   mutate(period = ifelse(between(Time/365,burnin,burnin+10), "early",
+  #                          ifelse(Time/365>(yr_end-10), "late", NA))) %>%
+  #   ungroup() %>%
+  #   filter(!is.na(period)) %>%
+  #   group_by(run,cap,wgts,env,other,period,Code,Name,w_id,fref) %>%
+  #   summarize(biom_mt_tot = mean(biom_mt_tot),
+  #             catch_mt = mean(catch_mt),
+  #             f = mean(f),
+  #             oy_rescale = mean(oy_rescale)) %>%
+  #   ungroup()
+  # 
+  # # need data sets of total biomass and total catch
+  # ecoind_df_tot <- ecoind_df_tmp %>%
+  #   group_by(run,cap,wgts,env,other,period) %>%
+  #   summarise(tot_biom = sum(biom_mt_tot),
+  #             tot_catch = sum(catch_mt)) %>%
+  #   ungroup()
+  # 
+  # ecoind_df <- ecoind_df_tmp %>%
+  #   left_join(estbo_key) %>%
+  #   left_join(ecoind_df_tot) %>%
+  #   mutate(b_over_b0 = biom_mt_tot / estbo,
+  #          f_over_ftarg = f/fref,
+  #          biom_over_btot = biom_mt_tot / tot_biom,
+  #          catch_over_ctot = catch_mt / tot_catch) %>%
+  #   select(run:Name, oy_rescale, b_over_b0:catch_over_ctot)
+  # 
+  # # pivot longer
+  # ecoind_df_long <- ecoind_df %>%
+  #   pivot_longer(-c(run:Name)) %>%
+  #   ungroup()
+  # 
+  # # dot plot
+  # p5 <- ecoind_df_long %>%
+  #   filter(env == "ssp585", Code %in% c("POL","COD","ATF","SBF","POP")) %>%
+  #   ggplot(aes(x = name, y = value, color = factor(cap), shape = wgts))+
+  #   geom_point(position = position_dodge(width = .75), size = 2)+
+  #   scale_color_manual(values = cap_col)+
+  #   theme_bw()+
+  #   geom_hline(yintercept = 1, linetype = "dashed")+
+  #   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  #   labs(x = "", y = "", color = "Cap (mt)", shape = "Weight scheme", title = "ssp585")+
+  #   facet_grid(Code~period)
+  # 
+  # ggsave(paste0(plotdir, "/ecoind.png"), p5, 
+  #        width = 12, height = 6.5, 
+  #        units = "in", dpi = 300)
+  
+}
+
+#' Plot Impact of Ecosystem Caps on Total Catch
+#'
+#' @description
+#' Creates bar plots showing the difference in total catch between capped
+#' scenarios and the no-cap baseline (800,000 mt cap), using equal weight scheme.
+#'
+#' @param catch_df Data frame. Output from pull_fishery_info() containing
+#'   fishery data across multiple runs and scenarios
+#'
+#' @return NULL (function creates and saves plot to plotdir)
+#'
+#' @details
+#' Calculates total catch across all OY species for each time step, then
+#' computes the difference between each capped scenario and the no-cap
+#' baseline. Only shows results for equal weight scheme to avoid overcrowding.
+#' Positive values indicate higher catch than baseline, negative values
+#' indicate reduced catch due to cap constraints.
+#' 
+#' Plot shows:
+#' \itemize{
+#'   \item X-axis: Year
+#'   \item Y-axis: Difference in catch (mt) from no-cap baseline
+#'   \item Fill color: Cap level
+#'   \item Facet by climate scenario
+#'   \item Only post-burn-in period shown
+#'   \item Reference line at y=0
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' plot_cap_impact(catch_df)
+#' }
+plot_catch_delta <- function(catch_df){
+  
+  # Calculate total catch by time and scenario
+  catch_totals <- catch_df %>%
+    filter(Time > 0) %>%
     filter(!is.na(catch_mt)) %>%
-    rowwise() %>%
-    mutate(period = ifelse(between(Time/365,burnin,burnin+10), "early",
-                           ifelse(Time/365>(yr_end-10), "late", NA))) %>%
-    ungroup() %>%
-    filter(!is.na(period)) %>%
-    group_by(run,cap,wgts,env,other,period,Code,Name,w_id,fref) %>%
-    summarize(biom_mt_tot = mean(biom_mt_tot),
-              catch_mt = mean(catch_mt),
-              f = mean(f),
-              oy_rescale = mean(oy_rescale)) %>%
-    ungroup()
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(catch_tot = sum(catch_mt), .groups = 'drop')
   
-  # need data sets of total biomass and total catch
-  ecoind_df_tot <- ecoind_df_tmp %>%
-    group_by(run,cap,wgts,env,other,period) %>%
-    summarise(tot_biom = sum(biom_mt_tot),
-              tot_catch = sum(catch_mt)) %>%
-    ungroup()
+  # Get no-cap baseline (800,000 mt cap)
+  catch_baseline <- catch_totals %>%
+    filter(cap == 8e+05) %>%
+    rename(catch_baseline = catch_tot) %>%
+    select(Time, wgts, env, catch_baseline)
   
-  ecoind_df <- ecoind_df_tmp %>%
-    left_join(estbo_key) %>%
-    left_join(ecoind_df_tot) %>%
-    mutate(b_over_b0 = biom_mt_tot / estbo,
-           f_over_ftarg = f/fref,
-           biom_over_btot = biom_mt_tot / tot_biom,
-           catch_over_ctot = catch_mt / tot_catch) %>%
-    select(run:Name, oy_rescale, b_over_b0:catch_over_ctot)
+  # Calculate difference from baseline
+  catch_delta <- catch_totals %>%
+    filter(cap != 8e+05, wgts == "equal") %>%
+    left_join(catch_baseline, by = c("Time", "wgts", "env")) %>%
+    mutate(delta = catch_tot - catch_baseline)
   
-  # pivot longer
-  ecoind_df_long <- ecoind_df %>%
-    pivot_longer(-c(run:Name)) %>%
-    ungroup()
+  # Make palette for capped scenarios only (excluding 8e+05)
+  cap_col <- pnw_palette(name="Sunset2", 
+                         n=length(unique(catch_delta$cap)), 
+                         type="discrete")
   
-  # dot plot
-  p5 <- ecoind_df_long %>%
-    filter(env == "ssp585", Code %in% c("POL","COD","ATF","SBF","POP")) %>%
-    ggplot(aes(x = name, y = value, color = factor(cap), shape = wgts))+
-    geom_point(position = position_dodge(width = .75), size = 2)+
-    scale_color_manual(values = cap_col)+
-    theme_bw()+
-    geom_hline(yintercept = 1, linetype = "dashed")+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-    labs(x = "", y = "", color = "Cap (mt)", shape = "Weight scheme", title = "ssp585")+
-    facet_grid(Code~period)
+  # Create plot
+  p <- catch_delta %>%
+    filter(Time > burnin * 365) %>%
+    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(cap))) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
+    geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.5) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(
+      x = "Year",
+      y = "Difference in total catch (mt)",
+      fill = "Cap (mt)",
+      title = "Impact of ecosystem caps on total OY catch (relative to no cap)"
+    ) +
+    facet_grid(~env)
   
-  ggsave(paste0(plotdir, "/ecoind.png"), p5, 
-         width = 12, height = 6.5, 
+  ggsave(paste0(plotdir, "/catch_cap_impact.png"), p, 
+         width = 12, height = 4,  
          units = "in", dpi = 300)
   
 }
@@ -950,7 +1096,7 @@ plot_ecosystem_indicators <- function(indicators_df){
   indicators_df$cap <- factor(indicators_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
   
   # order weigths
-  indicators_df$wgts <- factor(indicators_df$wgts, levels = c("equal","binary","ramp"))
+  indicators_df$wgts <- factor(indicators_df$wgts, levels = c("equal","binary","attainment-based"))
   
   # Make palette
   cap_col <- pnw_palette(name="Sunset2", n=length(unique(indicators_df$cap)), type="discrete")
@@ -1027,7 +1173,7 @@ plot_ecosystem_indicators <- function(indicators_df){
 #'   library(ggradar)
 #'   
 #'   # Color palette for weight schemes
-#'   wgts_col <- c("equal" = "#2E5266", "binary" = "#D65108", "ramp" = "#6B9080")
+#'   wgts_col <- c("equal" = "#2E5266", "binary" = "#D65108", "attainment-based" = "#6B9080")
 #'   
 #'   # Filter data based on arguments
 #'   radar_data <- indicators_df
@@ -1292,7 +1438,7 @@ plot_revenue <- function(revenue_df){
   revenue_df$cap <- factor(revenue_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
   
   # order weigths
-  revenue_df$wgts <- factor(revenue_df$wgts, levels = c("equal","binary","ramp"))
+  revenue_df$wgts <- factor(revenue_df$wgts, levels = c("equal","binary","attainment-based"))
   
   
   # Make palette
