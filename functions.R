@@ -691,32 +691,51 @@ plot_fishery <- function(catch_df){
 #' }
 plot_catch_delta <- function(catch_df){
   
-  # Calculate total catch by time and scenario
-  catch_totals <- catch_df %>%
+  # Calculate total catch and biomass by time and scenario
+  totals <- catch_df %>%
     filter(Time > 0) %>%
     filter(!is.na(catch_mt)) %>%
     group_by(Time, run, cap, wgts, env) %>%
-    summarise(catch_tot = sum(catch_mt), .groups = 'drop')
+    summarise(
+      catch_tot = sum(catch_mt),
+      biom_tot = sum(biom_mt_tot),
+      .groups = 'drop'
+    )
   
   # Get no-cap baseline (800,000 mt cap)
-  catch_baseline <- catch_totals %>%
+  baseline <- totals %>%
     filter(cap == 8e+05) %>%
-    rename(catch_baseline = catch_tot) %>%
-    select(Time, wgts, env, catch_baseline)
+    rename(
+      catch_baseline = catch_tot,
+      biom_baseline = biom_tot
+    ) %>%
+    select(Time, wgts, env, catch_baseline, biom_baseline)
   
   # Calculate difference from baseline
-  catch_delta <- catch_totals %>%
+  delta <- totals %>%
     filter(cap != 8e+05, wgts == "equal") %>%
-    left_join(catch_baseline, by = c("Time", "wgts", "env")) %>%
-    mutate(delta = catch_tot - catch_baseline)
+    left_join(baseline, by = c("Time", "wgts", "env")) %>%
+    mutate(
+      catch_delta = catch_tot - catch_baseline,
+      biom_delta = biom_tot - biom_baseline
+    ) %>%
+    select(Time, run, cap, wgts, env, catch_delta, biom_delta) %>%
+    pivot_longer(
+      cols = c(catch_delta, biom_delta),
+      names_to = "variable",
+      values_to = "delta"
+    ) %>%
+    mutate(variable = recode(variable,
+                             "catch_delta" = "Catch",
+                             "biom_delta" = "Biomass"))
   
   # Make palette for capped scenarios only (excluding 8e+05)
   cap_col <- pnw_palette(name="Sunset2", 
-                         n=length(unique(catch_delta$cap)), 
+                         n=length(unique(delta$cap)), 
                          type="discrete")
   
   # Create plot
-  p <- catch_delta %>%
+  p <- delta %>%
     filter(Time > burnin * 365) %>%
     ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(cap))) +
     geom_bar(stat = "identity", position = position_dodge()) +
@@ -727,14 +746,14 @@ plot_catch_delta <- function(catch_df){
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(
       x = "Year",
-      y = "Difference in total catch (mt)",
+      y = "Difference from no cap (mt)",
       fill = "Cap (mt)",
-      title = "Impact of ecosystem caps on total OY catch (relative to no cap)"
+      title = "Impact of ecosystem caps on total OY catch and biomass (relative to no cap)"
     ) +
-    facet_grid(~env)
+    facet_grid(variable ~ env)
   
-  ggsave(paste0(plotdir, "/catch_cap_impact.png"), p, 
-         width = 12, height = 4,  
+  ggsave(paste0(plotdir, "/catch_biom_cap_impact.png"), p, 
+         width = 12, height = 6,  
          units = "in", dpi = 300)
   
 }
@@ -1469,6 +1488,211 @@ plot_revenue <- function(revenue_df){
   ggsave(paste0(plotdir, "/oy_revenue.png"), p, 
          width = 10, height = 3,  
          units = "in", dpi = 300)
+}
+
+#' Plot Catch, Biomass, and Revenue Deltas Across Weight Schemes
+#'
+#' @description
+#' Creates stacked bar plots showing differences in catch, biomass, and revenue
+#' between capped scenarios and the no-cap baseline (800,000 mt cap) across
+#' different weight schemes. Also produces a summary table of cumulative differences.
+#'
+#' @param catch_df Data frame. Output from pull_fishery_info() containing
+#'   fishery data across multiple runs and scenarios
+#' @param revenue_df Data frame. Output from calc_revenue() containing
+#'   revenue data across multiple runs and scenarios
+#'
+#' @return NULL (function creates and saves stacked plots and summary table to plotdir)
+#'
+#' @details
+#' Filters to NoClimate scenario only to focus on cap effects without climate
+#' confounding. The 800,000 mt cap baseline (which only has "equal" weights)
+#' is expanded to all weight schemes since caps don't apply at that level.
+#' 
+#' 
+#' Creates three stacked panels:
+#' \itemize{
+#'   \item Catch differences (mt)
+#'   \item Biomass differences (mt)
+#'   \item Revenue differences ($)
+#' }
+#' Each panel is faceted by weight scheme.
+#'
+#' @examples
+#' \dontrun{
+#' price_dat <- read.csv("data/price.csv")
+#' all_runs <- key_config %>% pull(run)
+#' revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
+#' plot_catch_biom_revenue_delta(catch_df, revenue_all)
+#' }
+plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
+  
+  # Filter to NoClimate only
+  catch_df <- catch_df %>% filter(env == "NoClimate")
+  revenue_df <- revenue_df %>% filter(env == "NoClimate")
+  
+  # Ensure cap is numeric in both dataframes for joining
+  catch_df <- catch_df %>% mutate(cap = as.numeric(as.character(cap)))
+  revenue_df <- revenue_df %>% mutate(cap = as.numeric(cap))
+  
+  # Calculate total catch and biomass by time and scenario
+  totals <- catch_df %>%
+    filter(Time > 0) %>%
+    filter(!is.na(catch_mt)) %>%
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(
+      catch_tot = sum(catch_mt),
+      biom_tot = sum(biom_mt_tot),
+      .groups = 'drop'
+    )
+  
+  # Process revenue data
+  revenue_totals <- revenue_df %>%
+    filter(Time > 0) %>%
+    select(Time, run, cap, wgts, env, revenue)
+  
+  # Get no-cap baseline (800,000 mt cap) - only has "equal" wgts
+  baseline_catch_biom <- totals %>%
+    filter(cap == 8e+05) %>%
+    rename(
+      catch_baseline = catch_tot,
+      biom_baseline = biom_tot
+    ) %>%
+    select(Time, env, catch_baseline, biom_baseline)
+  
+  baseline_revenue <- revenue_totals %>%
+    filter(cap == 8e+05) %>%
+    rename(revenue_baseline = revenue) %>%
+    select(Time, env, revenue_baseline)
+  
+  # Expand baseline to all wgts levels (since it doesn't matter for 800K cap)
+  all_wgts <- unique(totals$wgts)
+  baseline_catch_biom <- baseline_catch_biom %>%
+    crossing(wgts = all_wgts)
+  
+  baseline_revenue <- baseline_revenue %>%
+    crossing(wgts = all_wgts)
+  
+  # Calculate differences from baseline
+  delta_catch_biom <- totals %>%
+    filter(cap != 8e+05) %>%
+    left_join(baseline_catch_biom, by = c("Time", "wgts", "env")) %>%
+    mutate(
+      catch_delta = catch_tot - catch_baseline,
+      biom_delta = biom_tot - biom_baseline
+    )
+  
+  delta_revenue <- revenue_totals %>%
+    filter(cap != 8e+05) %>%
+    left_join(baseline_revenue, by = c("Time", "wgts", "env")) %>%
+    mutate(revenue_delta = revenue - revenue_baseline)
+  
+  # Join catch/biom and revenue deltas
+  delta_all <- delta_catch_biom %>%
+    left_join(delta_revenue %>% select(Time, run, cap, wgts, env, revenue_delta),
+              by = c("Time", "run", "cap", "wgts", "env"))
+  
+  # Filter to post-burnin
+  delta_filtered <- delta_all %>%
+    filter(Time > burnin * 365)
+  
+  # Order wgts for plotting
+  delta_filtered$wgts <- factor(delta_filtered$wgts, 
+                                levels = c("equal", "binary", "attainment-based"))
+  
+  # Filter out binary + 2e+05 combination
+  delta_filtered <- delta_filtered %>%
+    filter(wgts != "binary")
+  
+  # adjust cap factors
+  delta_filtered$cap <- factor(delta_filtered$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  # Make palette consistent with plot_fishery (4 colors, then subset to 3)
+  # Generate 4 colors for all possible cap levels
+  all_cap_col <- pnw_palette(name="Sunset2", n=4, type="discrete")
+  # Keep colors corresponding to the 3 capped scenarios (excluding 800K which would be color 1)
+  cap_col <- all_cap_col[2:4]
+  
+  # Prepare catch and biomass for combined plot
+  delta_catch_biom_long <- delta_filtered %>%
+    select(Time, run, cap, wgts, env, catch_delta, biom_delta) %>%
+    pivot_longer(
+      cols = c(catch_delta, biom_delta),
+      names_to = "variable",
+      values_to = "delta"
+    ) %>%
+    mutate(variable = recode(variable,
+                             "catch_delta" = "Catch",
+                             "biom_delta" = "Biomass"))
+  
+  # Create combined catch/biomass plot
+  p_catch_biom <- delta_catch_biom_long %>%
+    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(cap))) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
+    geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.title.x = element_blank(),
+          legend.position = "none",
+          strip.text = element_text(size = 10)) +
+    labs(
+      y = "Difference from no cap (mt)",
+      fill = "Cap (mt)",
+      title = "Impact of ecosystem caps on OY catch, biomass, and revenue (NoClimate scenario)"
+    ) +
+    facet_grid(variable ~ wgts)
+  
+  # Create revenue plot
+  p_revenue <- delta_filtered %>%
+    ggplot(aes(x = (Time/365) + 1990, y = revenue_delta, fill = factor(cap))) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
+    geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    scale_y_continuous(labels = scales::dollar_format()) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.text = element_text(size = 10)) +
+    labs(
+      x = "Year",
+      y = "Revenue difference",
+      fill = "Cap (mt)"
+    ) +
+    facet_wrap(~wgts, nrow = 1)
+  
+  # Stack plots using patchwork
+  # Stack plots using patchwork
+  library(patchwork)
+  p_combined <- p_catch_biom / p_revenue +
+    plot_layout(heights = c(2, 1), guides = "collect") +
+    plot_annotation(tag_levels = 'A') &
+    theme(legend.position = "bottom")
+  
+  ggsave(paste0(plotdir, "/catch_biom_revenue_delta.png"), p_combined,
+         width = 14, height = 10, units = "in", dpi = 300)
+  
+  # Create summary table
+  summary_table <- delta_filtered %>%
+    group_by(cap, wgts, env) %>%
+    summarise(
+      total_catch_loss = sum(catch_delta),
+      total_biom_gain = sum(biom_delta),
+      total_revenue_loss = sum(revenue_delta),
+      .groups = 'drop'
+    ) %>%
+    arrange(wgts, cap)
+  
+  write.csv(summary_table, 
+            paste0(plotdir, "/summary_catch_biom_revenue_tradeoff.csv"), 
+            row.names = FALSE)
+  
+  # Print to console
+  cat("\n=== Summary of Catch-Biomass-Revenue Tradeoffs (NoClimate) ===\n\n")
+  print(summary_table, n = Inf)
+  cat("\n")
+  
 }
 
 #' Calculate Total Biomass for Lower Trophic Level Groups

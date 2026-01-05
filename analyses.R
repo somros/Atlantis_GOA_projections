@@ -191,7 +191,7 @@ key_config <- run_combs %>%
 # TODO: fix so that we compute F same as in the SS runs
 # Probably won't make a difference but we should be consistent
 
-catch_df_tmp <- bind_rows(lapply(run, pull_fishery_info))
+catch_df_tmp <- bind_rows(lapply(run, pull_fishery_info, ssb = T))
 
 # bind to key, and to group names
 catch_df <- catch_df_tmp %>%
@@ -361,6 +361,9 @@ revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
 # Create plot
 plot_revenue(revenue_all)
 
+# Tradeoff ----------------------------------------------------------------
+
+plot_catch_biom_revenue_delta(catch_df, revenue_df = revenue_all)
 
 # LTL ---------------------------------------------------------------------
 
