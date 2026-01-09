@@ -1451,15 +1451,6 @@ calc_revenue <- function(this_run, price_dat){
 #' }
 plot_revenue <- function(revenue_df){
   
-  # turn caps into factors for better plotting
-  revenue_df$cap <- as.character(revenue_df$cap)
-  revenue_df$cap[is.na(revenue_df$cap)] <- "No cap"
-  revenue_df$cap <- factor(revenue_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
-  
-  # order weigths
-  revenue_df$wgts <- factor(revenue_df$wgts, levels = c("equal","binary","attainment-based"))
-  
-  
   # Make palette
   cap_col <- pnw_palette(name="Sunset2", n=length(unique(revenue_df$cap)), type="discrete")
   
@@ -1490,12 +1481,12 @@ plot_revenue <- function(revenue_df){
          units = "in", dpi = 300)
 }
 
-#' Plot Catch, Biomass, and Revenue Deltas Across Weight Schemes
+#' Plot Catch, Biomass, and Revenue Deltas Across Weight Schemes (Decadal Averages)
 #'
 #' @description
-#' Creates stacked bar plots showing differences in catch, biomass, and revenue
-#' between capped scenarios and the no-cap baseline (800,000 mt cap) across
-#' different weight schemes. Also produces a summary table of cumulative differences.
+#' Creates stacked bar plots showing decadal average differences in catch, biomass, 
+#' and revenue between capped scenarios and the no-cap baseline (800,000 mt cap) 
+#' across different weight schemes. Also produces a summary table of cumulative differences.
 #'
 #' @param catch_df Data frame. Output from pull_fishery_info() containing
 #'   fishery data across multiple runs and scenarios
@@ -1509,6 +1500,7 @@ plot_revenue <- function(revenue_df){
 #' confounding. The 800,000 mt cap baseline (which only has "equal" weights)
 #' is expanded to all weight schemes since caps don't apply at that level.
 #' 
+#' Aggregates to decadal means with standard deviations shown as error bars.
 #' 
 #' Creates three stacked panels:
 #' \itemize{
@@ -1523,9 +1515,9 @@ plot_revenue <- function(revenue_df){
 #' price_dat <- read.csv("data/price.csv")
 #' all_runs <- key_config %>% pull(run)
 #' revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
-#' plot_catch_biom_revenue_delta(catch_df, revenue_all)
+#' plot_delta(catch_df, revenue_all)
 #' }
-plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
+plot_delta <- function(catch_df, revenue_df){
   
   # Filter to NoClimate only
   catch_df <- catch_df %>% filter(env == "NoClimate")
@@ -1596,26 +1588,26 @@ plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
   delta_filtered <- delta_all %>%
     filter(Time > burnin * 365)
   
-  # Order wgts for plotting
-  delta_filtered$wgts <- factor(delta_filtered$wgts, 
-                                levels = c("equal", "binary", "attainment-based"))
-  
-  # Filter out binary + 2e+05 combination
+  # Filter out binary
   delta_filtered <- delta_filtered %>%
     filter(wgts != "binary")
   
-  # adjust cap factors
+  # Add decade variable
+  delta_filtered <- delta_filtered %>%
+    mutate(decade = floor((Time/365 - burnin) / 10))
+  
+  # Order wgts and cap for plotting
+  delta_filtered$wgts <- factor(delta_filtered$wgts, 
+                                levels = c("equal", "binary", "attainment-based"))
   delta_filtered$cap <- factor(delta_filtered$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
   
   # Make palette consistent with plot_fishery (4 colors, then subset to 3)
-  # Generate 4 colors for all possible cap levels
   all_cap_col <- pnw_palette(name="Sunset2", n=4, type="discrete")
-  # Keep colors corresponding to the 3 capped scenarios (excluding 800K which would be color 1)
   cap_col <- all_cap_col[2:4]
   
   # Prepare catch and biomass for combined plot
   delta_catch_biom_long <- delta_filtered %>%
-    select(Time, run, cap, wgts, env, catch_delta, biom_delta) %>%
+    select(Time, decade, run, cap, wgts, env, catch_delta, biom_delta) %>%
     pivot_longer(
       cols = c(catch_delta, biom_delta),
       names_to = "variable",
@@ -1625,16 +1617,49 @@ plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
                              "catch_delta" = "Catch",
                              "biom_delta" = "Biomass"))
   
+  # Aggregate to decadal averages for catch and biomass
+  catch_biom_decadal <- delta_catch_biom_long %>%
+    group_by(decade, cap, wgts, env, variable) %>%
+    summarise(
+      delta_mean = mean(delta, na.rm = TRUE),
+      delta_sd = sd(delta, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Aggregate to decadal averages for revenue
+  revenue_decadal <- delta_filtered %>%
+    group_by(decade, cap, wgts, env) %>%
+    summarise(
+      revenue_delta_mean = mean(revenue_delta, na.rm = TRUE),
+      revenue_delta_sd = sd(revenue_delta, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Order factors
+  catch_biom_decadal$wgts <- factor(catch_biom_decadal$wgts, 
+                                    levels = c("equal", "binary", "attainment-based"))
+  catch_biom_decadal$cap <- factor(catch_biom_decadal$cap, 
+                                   levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  revenue_decadal$wgts <- factor(revenue_decadal$wgts, 
+                                 levels = c("equal", "binary", "attainment-based"))
+  revenue_decadal$cap <- factor(revenue_decadal$cap, 
+                                levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
   # Create combined catch/biomass plot
-  p_catch_biom <- delta_catch_biom_long %>%
-    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(cap))) +
-    geom_bar(stat = "identity", position = position_dodge()) +
-    scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
+  p_catch_biom <- catch_biom_decadal %>%
+    ggplot(aes(x = decade, y = delta_mean, fill = factor(cap))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    geom_bar(stat = "identity", position = position_dodge(),
+             color = "darkgrey", linewidth = 0.3) +
+    geom_errorbar(aes(ymin = delta_mean - delta_sd, 
+                      ymax = delta_mean + delta_sd),
+                  width = 0.2,
+                  position = position_dodge(width = 0.9)) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = unique(catch_biom_decadal$decade)) +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          axis.title.x = element_blank(),
+    theme(axis.title.x = element_blank(),
           legend.position = "none",
           strip.text = element_text(size = 10)) +
     labs(
@@ -1645,24 +1670,27 @@ plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
     facet_grid(variable ~ wgts)
   
   # Create revenue plot
-  p_revenue <- delta_filtered %>%
-    ggplot(aes(x = (Time/365) + 1990, y = revenue_delta, fill = factor(cap))) +
-    geom_bar(stat = "identity", position = position_dodge()) +
-    scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
+  p_revenue <- revenue_decadal %>%
+    ggplot(aes(x = decade, y = revenue_delta_mean, fill = factor(cap))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    geom_bar(stat = "identity", position = position_dodge(),
+             color = "darkgrey", linewidth = 0.3) +
+    geom_errorbar(aes(ymin = revenue_delta_mean - revenue_delta_sd, 
+                      ymax = revenue_delta_mean + revenue_delta_sd),
+                  width = 0.2,
+                  position = position_dodge(width = 0.9)) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = unique(revenue_decadal$decade)) +
     scale_y_continuous(labels = scales::dollar_format()) +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          strip.text = element_text(size = 10)) +
+    theme(strip.text = element_text(size = 10)) +
     labs(
-      x = "Year",
+      x = "Decade",
       y = "Revenue difference",
       fill = "Cap (mt)"
     ) +
     facet_wrap(~wgts, nrow = 1)
   
-  # Stack plots using patchwork
   # Stack plots using patchwork
   library(patchwork)
   p_combined <- p_catch_biom / p_revenue +
@@ -1690,6 +1718,301 @@ plot_catch_biom_revenue_delta <- function(catch_df, revenue_df){
   
   # Print to console
   cat("\n=== Summary of Catch-Biomass-Revenue Tradeoffs (NoClimate) ===\n\n")
+  print(summary_table, n = Inf)
+  cat("\n")
+  
+}
+
+#' Plot Catch Loss vs Ecosystem Biomass Gains (Decadal Averages)
+#'
+#' @description
+#' Creates stacked bar plots showing decadal average catch losses from OY species 
+#' alongside biomass gains in non-target ecosystem components (forage fish, 
+#' top predators, and Pacific halibut total biomass) under different cap scenarios.
+#'
+#' @param catch_df Data frame. Output from pull_fishery_info() containing
+#'   fishery data across multiple runs and scenarios
+#'
+#' @return NULL (function creates and saves plots to plotdir)
+#'
+#' @details
+#' Filters to NoClimate scenario only. Reads biomass data directly from
+#' AgeBiomIndx.txt files for:
+#' \itemize{
+#'   \item Forage fish: CAP, EUL, SAN, FOS, HER (total biomass)
+#'   \item Top predators: SSL, PIN, BDF, BSF (total biomass)
+#'   \item Pacific halibut: HAL (total biomass)
+#' }
+#' 
+#' Aggregates to decadal means with standard deviations shown as error bars.
+#'
+#' @examples
+#' \dontrun{
+#' plot_ecosystem_delta(catch_df)
+#' }
+plot_ecosystem_delta <- function(catch_df){
+  
+  # Filter to NoClimate only
+  catch_df <- catch_df %>% filter(env == "NoClimate")
+  
+  # Ensure cap is numeric
+  catch_df <- catch_df %>% mutate(cap = as.numeric(as.character(cap)))
+  
+  # Define functional groups
+  forage <- c("CAP", "EUL", "SAN", "FOS", "HER")
+  predators <- c("SSL", "PIN", "BDF", "BSF")
+  halibut <- "HAL"
+  
+  # Get all runs
+  all_runs <- unique(catch_df$run)
+  
+  # Function to read and process biomass for one run
+  get_ecosystem_biomass <- function(this_run){
+    
+    print(paste("Processing ecosystem biomass for run", this_run))
+    
+    # File paths
+    wd <- "../v2"
+    biom_file <- paste0("outputGOA_", this_run, "AgeBiomIndx.txt")
+    
+    # Read biomass file
+    biom <- read.csv(paste(wd, biom_file, sep = "/"), sep = " ", header = T)
+    
+    # Force convert all columns except Time to numeric
+    biom <- biom %>%
+      mutate(across(-Time, ~as.numeric(as.character(.))))
+    
+    # Drop incomplete rows
+    complete_rows_biom <- apply(biom[, -1], 1, function(x) all(!is.na(suppressWarnings(as.numeric(as.character(x))))))
+    last_complete_biom <- max(which(complete_rows_biom))
+    biom <- biom[1:last_complete_biom, ]
+    
+    # Subset to time range
+    biom <- biom %>% filter(Time/365 <= yr_end)
+    
+    # Convert to long format
+    biom_long <- biom %>%
+      pivot_longer(-Time, names_to = "Code.Age", values_to = "mt")
+    
+    # Split Code and Age
+    code_age_split <- strsplit(biom_long$Code.Age, "\\.", fixed = FALSE)
+    biom_long$Code <- sapply(code_age_split, `[`, 1)
+    biom_long$Age <- as.numeric(sapply(code_age_split, `[`, 2))
+    
+    # Calculate forage biomass
+    forage_biom <- biom_long %>%
+      filter(Code %in% forage) %>%
+      group_by(Time) %>%
+      summarise(forage_biom = sum(mt, na.rm = TRUE), .groups = 'drop')
+    
+    # Calculate predator biomass
+    predator_biom <- biom_long %>%
+      filter(Code %in% predators) %>%
+      group_by(Time) %>%
+      summarise(predator_biom = sum(mt, na.rm = TRUE), .groups = 'drop')
+    
+    # Calculate halibut total biomass
+    hal_biom <- biom_long %>%
+      filter(Code %in% halibut) %>%
+      group_by(Time) %>%
+      summarise(hal_biom = sum(mt, na.rm = TRUE), .groups = 'drop')
+    
+    # Combine all metrics
+    ecosystem_biom <- forage_biom %>%
+      left_join(predator_biom, by = "Time") %>%
+      left_join(hal_biom, by = "Time") %>%
+      mutate(run = this_run)
+    
+    return(ecosystem_biom)
+  }
+  
+  # Get ecosystem biomass for all runs
+  ecosystem_all <- map_df(all_runs, get_ecosystem_biomass)
+  
+  # Add metadata from key_config
+  ecosystem_all <- ecosystem_all %>%
+    left_join(key_config, by = "run") %>%
+    filter(env == "NoClimate")
+  
+  # Ensure cap is numeric
+  ecosystem_all <- ecosystem_all %>% mutate(cap = as.numeric(cap))
+  
+  # Get no-cap baseline (800,000 mt cap)
+  baseline_ecosystem <- ecosystem_all %>%
+    filter(cap == 8e+05) %>%
+    rename(
+      forage_baseline = forage_biom,
+      predator_baseline = predator_biom,
+      hal_baseline = hal_biom
+    ) %>%
+    select(Time, env, forage_baseline, predator_baseline, hal_baseline)
+  
+  # Expand baseline to all wgts levels
+  all_wgts <- unique(ecosystem_all$wgts)
+  baseline_ecosystem <- baseline_ecosystem %>%
+    crossing(wgts = all_wgts)
+  
+  # Calculate differences from baseline
+  delta_ecosystem <- ecosystem_all %>%
+    filter(cap != 8e+05) %>%
+    left_join(baseline_ecosystem, by = c("Time", "wgts", "env")) %>%
+    mutate(
+      forage_delta = forage_biom - forage_baseline,
+      predator_delta = predator_biom - predator_baseline,
+      hal_delta = hal_biom - hal_baseline
+    )
+  
+  # Calculate catch deltas
+  totals <- catch_df %>%
+    filter(Time > 0) %>%
+    filter(!is.na(catch_mt)) %>%
+    group_by(Time, run, cap, wgts, env) %>%
+    summarise(catch_tot = sum(catch_mt), .groups = 'drop')
+  
+  baseline_catch <- totals %>%
+    filter(cap == 8e+05) %>%
+    rename(catch_baseline = catch_tot) %>%
+    select(Time, env, catch_baseline) %>%
+    crossing(wgts = all_wgts)
+  
+  delta_catch <- totals %>%
+    filter(cap != 8e+05) %>%
+    left_join(baseline_catch, by = c("Time", "wgts", "env")) %>%
+    mutate(catch_delta = catch_tot - catch_baseline)
+  
+  # Join catch and ecosystem deltas
+  delta_all <- delta_catch %>%
+    left_join(delta_ecosystem %>% select(Time, run, cap, wgts, env, 
+                                         forage_delta, predator_delta, hal_delta),
+              by = c("Time", "run", "cap", "wgts", "env"))
+  
+  # Filter to post-burnin and exclude binary
+  delta_filtered <- delta_all %>%
+    filter(Time > burnin * 365) %>%
+    filter(wgts != "binary")
+  
+  # Add decade variable
+  delta_filtered <- delta_filtered %>%
+    mutate(decade = floor((Time/365 - burnin) / 10))
+  
+  # Aggregate to decadal averages for catch
+  catch_decadal <- delta_filtered %>%
+    group_by(decade, cap, wgts, env) %>%
+    summarise(
+      catch_delta_mean = mean(catch_delta, na.rm = TRUE),
+      catch_delta_sd = sd(catch_delta, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Prepare ecosystem metrics for plotting
+  delta_ecosystem_long <- delta_filtered %>%
+    select(Time, decade, run, cap, wgts, env, forage_delta, predator_delta, hal_delta) %>%
+    pivot_longer(
+      cols = c(forage_delta, predator_delta, hal_delta),
+      names_to = "variable",
+      values_to = "delta"
+    ) %>%
+    mutate(variable = recode(variable,
+                             "forage_delta" = "Forage fish",
+                             "predator_delta" = "Top predators",
+                             "hal_delta" = "Halibut"))
+  
+  # Aggregate to decadal averages for ecosystem metrics
+  ecosystem_decadal <- delta_ecosystem_long %>%
+    group_by(decade, cap, wgts, env, variable) %>%
+    summarise(
+      delta_mean = mean(delta, na.rm = TRUE),
+      delta_sd = sd(delta, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Order factors
+  catch_decadal$wgts <- factor(catch_decadal$wgts, 
+                               levels = c("equal", "binary", "attainment-based"))
+  catch_decadal$cap <- factor(catch_decadal$cap, 
+                              levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  ecosystem_decadal$wgts <- factor(ecosystem_decadal$wgts, 
+                                   levels = c("equal", "binary", "attainment-based"))
+  ecosystem_decadal$cap <- factor(ecosystem_decadal$cap, 
+                                  levels = c("8e+05","6e+05","4e+05","2e+05"))
+  
+  # Make palette
+  all_cap_col <- pnw_palette(name="Sunset2", n=4, type="discrete")
+  cap_col <- all_cap_col[2:4]
+  
+  # Create catch plot
+  p_catch <- catch_decadal %>%
+    ggplot(aes(x = decade, y = catch_delta_mean, fill = factor(cap))) +
+    geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    geom_bar(stat = "identity", position = position_dodge(), 
+             color = "darkgrey", linewidth = 0.3) +
+    geom_errorbar(aes(ymin = catch_delta_mean - catch_delta_sd, 
+                      ymax = catch_delta_mean + catch_delta_sd),
+                  width = 0.2,
+                  position = position_dodge(width = 0.9)) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = unique(catch_decadal$decade)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(),
+          legend.position = "none",
+          strip.text = element_text(size = 10)) +
+    labs(
+      y = "Catch difference (mt)",
+      fill = "Cap (mt)",
+      title = "Impact of ecosystem caps on OY catch and ecosystem biomass (NoClimate scenario)"
+    ) +
+    facet_wrap(~wgts, nrow = 1)
+  
+  # Create ecosystem metrics plot
+  p_ecosystem <- ecosystem_decadal %>%
+    ggplot(aes(x = decade, y = delta_mean, fill = factor(cap))) +
+    geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+    geom_bar(stat = "identity", position = position_dodge(),
+             color = "darkgrey", linewidth = 0.3) +
+    geom_errorbar(aes(ymin = delta_mean - delta_sd, 
+                      ymax = delta_mean + delta_sd),
+                  width = 0.2,
+                  position = position_dodge(width = 0.9)) +
+    scale_fill_manual(values = cap_col) +
+    scale_x_continuous(breaks = unique(ecosystem_decadal$decade)) +
+    theme_bw() +
+    theme(strip.text = element_text(size = 10)) +
+    labs(
+      x = "Decade",
+      y = "Biomass difference (mt)",
+      fill = "Cap (mt)"
+    ) +
+    facet_grid(variable ~ wgts, scales = "free_y")
+  
+  # Stack plots using patchwork
+  library(patchwork)
+  p_combined <- p_catch / p_ecosystem +
+    plot_layout(heights = c(1, 3), guides = "collect") +
+    plot_annotation(tag_levels = 'A') &
+    theme(legend.position = "bottom")
+  
+  ggsave(paste0(plotdir, "/catch_ecosystem_delta.png"), p_combined,
+         width = 14, height = 10, units = "in", dpi = 300)
+  
+  # Create summary table
+  summary_table <- delta_filtered %>%
+    group_by(cap, wgts, env) %>%
+    summarise(
+      total_catch_loss = sum(catch_delta),
+      total_forage_gain = sum(forage_delta),
+      total_predator_gain = sum(predator_delta),
+      total_hal_gain = sum(hal_delta),
+      .groups = 'drop'
+    ) %>%
+    arrange(wgts, cap)
+  
+  write.csv(summary_table, 
+            paste0(plotdir, "/summary_catch_ecosystem_tradeoff.csv"), 
+            row.names = FALSE)
+  
+  # Print to console
+  cat("\n=== Summary of Catch-Ecosystem Tradeoffs (NoClimate) ===\n\n")
   print(summary_table, n = Inf)
   cat("\n")
   
@@ -1977,64 +2300,70 @@ calc_weight_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = N
   return(rnsn_summ)
 }
 
-#' Plot Weight-at-Age Heatmaps as Ratios to NoClimate
+#' Create a heatmap of weight-at-age changes relative to baseline
 #'
-#' @description
-#' Creates heatmaps showing the ratio of weight-at-age under climate scenarios
-#' relative to the NoClimate baseline, averaged over the last 5 years.
+#' This function creates a heatmap visualization showing percentage changes in
+#' weight-at-age data compared to a baseline scenario (NoClimate with equal weights).
+#' The comparison can be made across environmental scenarios, capacity levels, or
+#' weight schemes. The function filters to the last n years, calculates mean weights,
+#' and produces a faceted heatmap saved to disk.
 #'
-#' @param waa_df Data frame. Output from calc_weight_at_age()
-#'   containing weight-at-age data across runs and scenarios
-#' @param cap_filter Numeric or NULL. Cap value to filter to (default NULL for all caps)
-#' @param wgts_filter Character. Weight scheme to filter to (default "equal")
-#' @param sp_names_filter Character vector. Species names to include 
-#'   (default NULL for all species in data)
-#' @param n_years Numeric. Number of final years to average (default 5)
+#' @param waa_df Data frame containing weight-at-age data with columns: year, Name,
+#'   LongName, age, env, cap, wgts, and weight
+#' @param by_env Logical. If TRUE, plot comparison across environmental scenarios.
+#'   Default is FALSE
+#' @param by_cap Logical. If TRUE, plot comparison across capacity levels.
+#'   Default is FALSE
+#' @param by_wgts Logical. If TRUE, plot comparison across weight schemes.
+#'   Default is FALSE
+#' @param n_years Integer. Number of most recent years to include in the analysis.
+#'   Default is 5
+#' @param tag Character string. Optional tag to append to the output filename.
+#'   Default is NULL
 #'
-#' @return NULL (function creates and saves plot to plotdir)
+#' @return Invisibly returns a data frame of weight-at-age ratios with columns
+#'   including percent_change and ratio. If no data remains after filtering,
+#'   returns NULL with a message
 #'
 #' @details
-#' Filters to the last n_years (using integer years only - Jan 1 values),
-#' calculates mean weight-at-age, and computes ratios of climate scenarios
-#' (ssp126, ssp245, ssp585) relative to NoClimate baseline.
-#' 
-#' Heatmap shows:
+#' Exactly one of by_env, by_cap, or by_wgts must be TRUE. The function:
 #' \itemize{
-#'   \item Rows: Species (LongName)
-#'   \item Columns: Age class
-#'   \item Color: Ratio (climate scenario / NoClimate)
-#'   \item Facets: Cap (rows) × Climate scenario (columns)
+#'   \item Filters data to integer year values (January 1st)
+#'   \item Calculates mean weights over the last n_years
+#'   \item Compares to baseline: NoClimate scenario, cap=8e+05 (or 4e+05 for by_wgts),
+#'         and equal weights
+#'   \item Creates a diverging color heatmap (blue-white-red) showing percent change
+#'   \item Saves plot to plotdir as PNG (10x5 inches, 300 dpi)
 #' }
+#'
+#' @note Requires ggplot2, dplyr, and colorspace packages. Assumes plotdir is
+#'   defined in the global environment
 #'
 #' @examples
 #' \dontrun{
-#' plot_waa_heatmap(waa_all)
-#' plot_waa_heatmap(waa_all, sp_names_filter = c("Pollock", "Cod"))
-#' plot_waa_heatmap(waa_all, cap_filter = 4e+05)
+#' # Plot by environmental scenario
+#' plot_waa_heatmap(waa_data, by_env = TRUE, n_years = 5, tag = "climate")
+#'
+#' # Plot by capacity level
+#' plot_waa_heatmap(waa_data, by_cap = TRUE, n_years = 10, tag = "capacity")
 #' }
+#'
+#' @export
 plot_waa_heatmap <- function(waa_df, 
-                             cap_filter = NULL,
-                             wgts_filter = "equal",
-                             sp_names_filter = NULL,
-                             n_years = 5){
+                             by_env = F,
+                             by_cap = F,
+                             by_wgts = F,
+                             n_years = 5,
+                             tag = NULL){
+  
+  if(sum(by_env, by_cap, by_wgts) != 1){
+    stop("You need to plot either by env, cap, or wgts")
+  }
   
   # Filter to integer years (Jan 1 values) and weight scheme
   waa_filtered <- waa_df %>%
     mutate(year_int = floor(year)) %>%
-    filter(year == year_int) %>%  # Keep only integer year values
-    filter(wgts == wgts_filter)
-  
-  # Filter to specific cap if requested
-  if(!is.null(cap_filter)) {
-    waa_filtered <- waa_filtered %>%
-      filter(cap == cap_filter)
-  }
-  
-  # Filter to specific species if requested
-  if(!is.null(sp_names_filter)) {
-    waa_filtered <- waa_filtered %>%
-      filter(Name %in% sp_names_filter)
-  }
+    filter(year == year_int)  # Keep only integer year values
   
   # Get the last n years
   max_year <- max(waa_filtered$year_int, na.rm = TRUE)
@@ -2043,31 +2372,68 @@ plot_waa_heatmap <- function(waa_df,
   # Filter to last n years and calculate means
   waa_5y <- waa_filtered %>%
     filter(year_int >= min_year) %>%
-    group_by(Name, LongName, age, env, cap) %>%
+    group_by(Name, LongName, age, env, cap, wgts) %>%
     summarise(weight_mean = mean(weight, na.rm = TRUE), .groups = 'drop')
   
-  # Separate NoClimate as baseline
-  waa_baseline <- waa_5y %>%
-    filter(env == "NoClimate") %>%
-    select(Name, LongName, age, cap, weight_baseline = weight_mean)
+  # depending on the factoring option, filter the data and make a baseline.
+  # Base conditions:
+  # env = NoClimate
+  # cap = 8e+05 
+  # wgts = equal
   
-  # Join with climate scenarios and calculate ratios
-  waa_ratios <- waa_5y %>%
-    filter(env != "NoClimate") %>%
-    left_join(waa_baseline, by = c("Name", "LongName", "age", "cap")) %>%
-    mutate(ratio = weight_mean / weight_baseline,
-           percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
+  waa_baseline <- waa_5y %>% 
+    filter(env == "NoClimate", wgts == "equal") %>%
+    rename(weight_baseline = weight_mean)
+  
+  if(by_wgts){
+    waa_baseline <- waa_baseline %>% filter(cap == 4e+05) # you cannot use 800K because there are no wgts there (no cap)
+  } else {
+    waa_baseline <- waa_baseline %>% filter(cap == 8e+05)
+  }
+  
+  # drop cols
+  waa_baseline <- waa_baseline %>%
+    select(-c(env, cap, wgts))
+  
+  if(by_env){
+    
+    # Join with climate scenarios and calculate ratios
+    waa_ratios <- waa_5y %>%
+      filter(env != "NoClimate", cap == 8e+05, wgts == "equal") %>%
+      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = weight_mean / weight_baseline,
+             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
+    
+    lab <-"env"
+    
+  } else if (by_cap) {
+    
+    waa_ratios <- waa_5y %>%
+      filter(env == "NoClimate", cap != 8e+05, wgts == "equal") %>%
+      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = weight_mean / weight_baseline,
+             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
+    
+    lab <- "cap"
+    
+  } else {
+    
+    waa_ratios <- waa_5y %>%
+      filter(env == "NoClimate", cap == 4e+05, wgts != "equal") %>%
+      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = weight_mean / weight_baseline,
+             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
+    
+    lab <- "wgts"
+
+  }
+
   
   # Check if we have data
   if(nrow(waa_ratios) == 0) {
     message("No data to plot after filtering")
     return(NULL)
   }
-  
-  # Create labels for scenarios
-  env_labs <- c('ssp126' = 'SSP1-2.6',
-                'ssp245' = 'SSP2-4.5', 
-                'ssp585' = 'SSP5-8.5')
   
   # Create heatmap
   p <- waa_ratios %>%
@@ -2079,32 +2445,24 @@ plot_waa_heatmap <- function(waa_df,
     scale_x_continuous(breaks = seq(1, max(waa_ratios$age, na.rm = TRUE))) +
     labs(x = 'Age class', 
          y = '', 
-         fill = '% change\nfrom\nNoClimate',
-         title = paste0('Relative change in weight-at-age (', wgts_filter, ' weights)')) +
+         fill = '% change\nfrom\nbaseline',
+         title = paste0('Relative change in weight-at-age - ', lab)) +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          strip.text = element_text(size = 10)) +
-    facet_grid(cap ~ env, labeller = labeller(env = env_labs))
+          strip.text = element_text(size = 10))
   
-  # Create filename suffix
-  sp_suffix <- if(!is.null(sp_names_filter)) {
-    paste0("_", paste(sp_names_filter, collapse = "_"))
+  if(by_env){
+    p <- p + facet_grid(~ env)
+  } else if (by_cap) {
+    p <- p + facet_grid(~ cap)
   } else {
-    ""
+    p <- p + facet_grid(~ wgts)
   }
   
-  cap_suffix <- if(!is.null(cap_filter)) {
-    cap_str <- paste(as.character(cap_filter), collapse = "_")
-    cap_str <- gsub("\\+", "", cap_str)
-    paste0("_cap", cap_str)
-  } else {
-    ""
-  }
-  
-  ggsave(paste0(plotdir, "/waa_heatmap_", wgts_filter, cap_suffix, sp_suffix, ".png"), 
+  ggsave(paste0(plotdir, "/heatmaps/waa_heatmap_", lab, "_", tag, ".png"), 
          p, 
          width = 10, 
-         height = ( length(unique(waa_ratios$cap)) * length(unique(waa_ratios$LongName)) * 0.75), 
+         height = 5, 
          units = "in", dpi = 300)
   
   # Return the data for inspection if needed
@@ -2223,64 +2581,70 @@ calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = 
   return(abun_summ)
 }
 
-#' Plot Numbers-at-Age Heatmaps as Ratios to NoClimate
+#' Create a heatmap of numbers-at-age changes relative to baseline
 #'
-#' @description
-#' Creates heatmaps showing the ratio of numbers-at-age under climate scenarios
-#' relative to the NoClimate baseline, averaged over the last 5 years.
+#' This function creates a heatmap visualization showing percentage changes in
+#' numbers-at-age data compared to a baseline scenario (NoClimate with equal weights).
+#' The comparison can be made across environmental scenarios, capacity levels, or
+#' weight schemes. The function filters to the last n years, calculates mean abundances,
+#' and produces a faceted heatmap saved to disk.
 #'
-#' @param naa_df Data frame. Output from calc_numbers_at_age()
-#'   containing numbers-at-age data across runs and scenarios
-#' @param cap_filter Numeric or NULL. Cap value to filter to (default NULL for all caps)
-#' @param wgts_filter Character. Weight scheme to filter to (default "equal")
-#' @param sp_names_filter Character vector. Species names to include 
-#'   (default NULL for all species in data)
-#' @param n_years Numeric. Number of final years to average (default 5)
+#' @param naa_df Data frame containing numbers-at-age data with columns: year, Name,
+#'   LongName, age, env, cap, wgts, and abun
+#' @param by_env Logical. If TRUE, plot comparison across environmental scenarios.
+#'   Default is FALSE
+#' @param by_cap Logical. If TRUE, plot comparison across capacity levels.
+#'   Default is FALSE
+#' @param by_wgts Logical. If TRUE, plot comparison across weight schemes.
+#'   Default is FALSE
+#' @param n_years Integer. Number of most recent years to include in the analysis.
+#'   Default is 5
+#' @param tag Character string. Optional tag to append to the output filename.
+#'   Default is NULL
 #'
-#' @return NULL (function creates and saves plot to plotdir)
+#' @return Invisibly returns a data frame of numbers-at-age ratios with columns
+#'   including percent_change and ratio. If no data remains after filtering,
+#'   returns NULL with a message
 #'
 #' @details
-#' Filters to the last n_years (using integer years only - Jan 1 values),
-#' calculates mean numbers-at-age, and computes ratios of climate scenarios
-#' (ssp126, ssp245, ssp585) relative to NoClimate baseline.
-#' 
-#' Heatmap shows:
+#' Exactly one of by_env, by_cap, or by_wgts must be TRUE. The function:
 #' \itemize{
-#'   \item Rows: Species (LongName)
-#'   \item Columns: Age class
-#'   \item Color: Percent change (climate scenario / NoClimate)
-#'   \item Facets: Cap (rows) × Climate scenario (columns)
+#'   \item Filters data to integer year values (January 1st)
+#'   \item Calculates mean abundances over the last n_years
+#'   \item Compares to baseline: NoClimate scenario, cap=8e+05 (or 4e+05 for by_wgts),
+#'         and equal weights
+#'   \item Creates a diverging color heatmap (blue-white-red) showing percent change
+#'   \item Saves plot to plotdir as PNG (10x5 inches, 300 dpi)
 #' }
+#'
+#' @note Requires ggplot2, dplyr, and colorspace packages. Assumes plotdir is
+#'   defined in the global environment
 #'
 #' @examples
 #' \dontrun{
-#' plot_naa_heatmap(naa_all)
-#' plot_naa_heatmap(naa_all, sp_names_filter = c("Pollock", "Cod"))
-#' plot_naa_heatmap(naa_all, cap_filter = 4e+05)
+#' # Plot by environmental scenario
+#' plot_naa_heatmap(naa_data, by_env = TRUE, n_years = 5, tag = "climate")
+#'
+#' # Plot by capacity level
+#' plot_naa_heatmap(naa_data, by_cap = TRUE, n_years = 10, tag = "capacity")
 #' }
+#'
+#' @export
 plot_naa_heatmap <- function(naa_df, 
-                             cap_filter = NULL,
-                             wgts_filter = "equal",
-                             sp_names_filter = NULL,
-                             n_years = 5){
+                             by_env = F,
+                             by_cap = F,
+                             by_wgts = F,
+                             n_years = 5,
+                             tag = NULL){
+  
+  if(sum(by_env, by_cap, by_wgts) != 1){
+    stop("You need to plot either by env, cap, or wgts")
+  }
   
   # Filter to integer years (Jan 1 values) and weight scheme
   naa_filtered <- naa_df %>%
     mutate(year_int = floor(year)) %>%
-    filter(year == year_int) %>%  # Keep only integer year values
-    filter(wgts == wgts_filter)
-  
-  # Filter to specific cap if requested
-  if(!is.null(cap_filter)) {
-    naa_filtered <- naa_filtered %>%
-      filter(cap == cap_filter)
-  }
-  
-  # Filter to specific species if requested
-  if(!is.null(sp_names_filter)) {
-    naa_filtered <- naa_filtered %>%
-      filter(Name %in% sp_names_filter)
-  }
+    filter(year == year_int)  # Keep only integer year values
   
   # Get the last n years
   max_year <- max(naa_filtered$year_int, na.rm = TRUE)
@@ -2289,31 +2653,66 @@ plot_naa_heatmap <- function(naa_df,
   # Filter to last n years and calculate means
   naa_5y <- naa_filtered %>%
     filter(year_int >= min_year) %>%
-    group_by(Name, LongName, age, env, cap) %>%
+    group_by(Name, LongName, age, env, cap, wgts) %>%
     summarise(abun_mean = mean(abun, na.rm = TRUE), .groups = 'drop')
   
-  # Separate NoClimate as baseline
-  naa_baseline <- naa_5y %>%
-    filter(env == "NoClimate") %>%
-    select(Name, LongName, age, cap, abun_baseline = abun_mean)
+  # depending on the factoring option, filter the data and make a baseline.
+  # Base conditions:
+  # env = NoClimate
+  # cap = 8e+05 
+  # wgts = equal
   
-  # Join with climate scenarios and calculate ratios
-  naa_ratios <- naa_5y %>%
-    filter(env != "NoClimate") %>%
-    left_join(naa_baseline, by = c("Name", "LongName", "age", "cap")) %>%
-    mutate(ratio = abun_mean / abun_baseline,
-           percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
+  naa_baseline <- naa_5y %>% 
+    filter(env == "NoClimate", wgts == "equal") %>%
+    rename(abun_baseline = abun_mean)
+  
+  if(by_wgts){
+    naa_baseline <- naa_baseline %>% filter(cap == 4e+05) # you cannot use 800K because there are no wgts there (no cap)
+  } else {
+    naa_baseline <- naa_baseline %>% filter(cap == 8e+05)
+  }
+  
+  # drop cols
+  naa_baseline <- naa_baseline %>%
+    select(-c(env, cap, wgts))
+  
+  if(by_env){
+    
+    # Join with climate scenarios and calculate ratios
+    naa_ratios <- naa_5y %>%
+      filter(env != "NoClimate", cap == 8e+05, wgts == "equal") %>%
+      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = abun_mean / abun_baseline,
+             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
+    
+    lab <- "env"
+    
+  } else if (by_cap) {
+    
+    naa_ratios <- naa_5y %>%
+      filter(env == "NoClimate", cap != 8e+05, wgts == "equal") %>%
+      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = abun_mean / abun_baseline,
+             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
+    
+    lab <- "cap"
+    
+  } else {
+    
+    naa_ratios <- naa_5y %>%
+      filter(env == "NoClimate", cap == 4e+05, wgts != "equal") %>%
+      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = abun_mean / abun_baseline,
+             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
+    
+    lab <- "wgts"
+  }
   
   # Check if we have data
   if(nrow(naa_ratios) == 0) {
     message("No data to plot after filtering")
     return(NULL)
   }
-  
-  # Create labels for scenarios
-  env_labs <- c('ssp126' = 'SSP1-2.6',
-                'ssp245' = 'SSP2-4.5', 
-                'ssp585' = 'SSP5-8.5')
   
   # Create heatmap
   p <- naa_ratios %>%
@@ -2325,32 +2724,24 @@ plot_naa_heatmap <- function(naa_df,
     scale_x_continuous(breaks = seq(1, max(naa_ratios$age, na.rm = TRUE))) +
     labs(x = 'Age class', 
          y = '', 
-         fill = '% change\nfrom\nNoClimate',
-         title = paste0('Relative change in numbers-at-age (', wgts_filter, ' weights)')) +
+         fill = '% change\nfrom\nbaseline',
+         title = paste0('Relative change in numbers-at-age - ', lab)) +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          strip.text = element_text(size = 10)) +
-    facet_grid(cap ~ env, labeller = labeller(env = env_labs))
+          strip.text = element_text(size = 10))
   
-  # Create filename suffix
-  sp_suffix <- if(!is.null(sp_names_filter)) {
-    paste0("_", paste(sp_names_filter, collapse = "_"))
+  if(by_env){
+    p <- p + facet_grid(~ env)
+  } else if (by_cap) {
+    p <- p + facet_grid(~ cap)
   } else {
-    ""
+    p <- p + facet_grid(~ wgts)
   }
   
-  cap_suffix <- if(!is.null(cap_filter)) {
-    cap_str <- paste(as.character(cap_filter), collapse = "_")
-    cap_str <- gsub("\\+", "", cap_str)
-    paste0("_cap", cap_str)
-  } else {
-    ""
-  }
-  
-  ggsave(paste0(plotdir, "/naa_heatmap_", wgts_filter, cap_suffix, sp_suffix, ".png"), 
+  ggsave(paste0(plotdir, "/heatmaps/naa_heatmap_", lab, "_", tag, ".png"), 
          p, 
          width = 10, 
-         height = ( length(unique(naa_ratios$cap)) * length(unique(naa_ratios$LongName)) * 0.75), 
+         height = 5, 
          units = "in", dpi = 300)
   
   # Return the data for inspection if needed

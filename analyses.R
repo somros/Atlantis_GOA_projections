@@ -250,7 +250,8 @@ for(i in 1:length(oy_species)){
   
   p6 <- h_plot %>%
     filter(Time >= burnin + 5) %>%
-    filter(Name == current_name) %>%
+    filter(Name == current_name) %>% 
+    filter(wgts != "binary") %>%
     ggplot(aes(x = f, y = H, color = Time, shape = wgts))+
     geom_point(aes(shape = factor(wgts)), size = 1)+
     scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
@@ -271,6 +272,7 @@ for(i in 1:length(oy_species)){
 }
 
 # Diets -------------------------------------------------------------------
+# Proportion of pollock in the diet of its key predators
 # do for all runs
 diets_pol_pred <- bind_rows(lapply(run, get_polprop))
 
@@ -292,7 +294,9 @@ for(i in 1:length(unique(POL_predators$Predator))){
   p7 <- diet_plot %>%
     #filter(Time >= burnin) %>%
     filter(Time > 5) %>%
+    filter(Time %% 2 == 0) %>% # filter to even years only to make the plot less confusing - for some reason points fluctuate up and down every 2 years
     filter(Predator == current_code) %>%
+    filter(wgts != "binary") %>%
     ggplot(aes(x = Time, y = POL, color = f, shape = wgts))+
     annotate("rect", xmin = 0, xmax = burnin, ymin = -Inf, ymax = Inf, 
              fill = "grey", alpha = 0.3) +
@@ -309,7 +313,7 @@ for(i in 1:length(unique(POL_predators$Predator))){
          title = current_name)+
     facet_grid(factor(env)~cap)
   
-  ggsave(paste0(plotdir, "/diet/", current_code, "_hcr.png"), p7, 
+  ggsave(paste0(plotdir, "/diet/", current_code, "_diet.png"), p7, 
          width = 10, height = 4.5, 
          units = "in", dpi = 300)
   
@@ -317,7 +321,7 @@ for(i in 1:length(unique(POL_predators$Predator))){
 
 # NB: at the moment there is a pervasive time series effect that is masking most of these plots
 # This is tied to the climate scenario to an extent, but it's also just POL declining over time in the base model
-
+# Differences overall are very small
 
 # Ecosystem indicators ----------------------------------------------------
 
@@ -358,19 +362,39 @@ all_runs <- key_config %>% pull(run)
 
 revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
 
+# turn caps into factors for better plotting
+revenue_all$cap <- as.character(revenue_all$cap)
+revenue_all$cap[is.na(revenue_all$cap)] <- "No cap"
+revenue_all$cap <- factor(revenue_all$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
+
+# order weigths
+revenue_all$wgts <- factor(revenue_all$wgts, levels = c("equal","binary","attainment-based"))
+
 # Create plot
-plot_revenue(revenue_all)
+plot_revenue(revenue_all %>% filter(wgts != "binary"))
 
 # Tradeoff ----------------------------------------------------------------
 
-plot_catch_biom_revenue_delta(catch_df, revenue_df = revenue_all)
+plot_delta(catch_df, revenue_df = revenue_all)
+
+plot_ecosystem_delta(catch_df)
 
 # LTL ---------------------------------------------------------------------
 
 ltl_biomass_all <- map_df(run, calc_ltl_biomass, groups = c("EUP", "ZL", "ZM", "PL", "PAN", "PWN"))
 
+# turn caps into factors for better plotting
+ltl_biomass_all$cap <- as.character(ltl_biomass_all$cap)
+ltl_biomass_all$cap[is.na(ltl_biomass_all$cap)] <- "No cap"
+ltl_biomass_all$cap <- factor(ltl_biomass_all$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
+
+# order weigths
+ltl_biomass_all$wgts <- factor(ltl_biomass_all$wgts, levels = c("equal","binary","attainment-based"))
+
 # Create plot
-plot_ltl_biomass(ltl_biomass_all)
+plot_ltl_biomass(ltl_biomass_all %>% 
+                   filter(wgts != "binary") %>%
+                   filter(Time %% 365 == 0))
 
 # WAA ---------------------------------------------------------------------
 
@@ -384,8 +408,20 @@ waa_core <- map_df(run, ~calc_weight_at_age(.x, sp_names = these_names, boundary
 # plot
 # For all species at default cap (8e+05)
 # plot_waa_heatmap(waa_pollock)
-plot_waa_heatmap(waa_core,
-                 cap_filter = 8e+05)
+# plot
+plot_waa_heatmap(waa_core, by_env = T, tag = "core")
+plot_waa_heatmap(waa_core, by_cap = T, tag = "core")
+plot_waa_heatmap(waa_core, by_wgts = T, tag = "core")
+
+# do it for top predators
+# For all runs with specific species
+preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surface_fish")
+waa_pred <- map_df(run, ~calc_weight_at_age(.x, sp_names = preds, boundary_boxes = boundary_boxes))
+
+# plot
+plot_waa_heatmap(waa_pred, by_env = T, tag = "pred")
+plot_waa_heatmap(waa_pred, by_cap = T, tag = "pred")
+plot_waa_heatmap(waa_pred, by_wgts = T, tag = "pred")
 
 # NAA ---------------------------------------------------------------------
 
@@ -394,5 +430,6 @@ naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundar
 # plot
 # For all species at default cap (8e+05)
 # plot_waa_heatmap(waa_pollock)
-plot_naa_heatmap(naa_core %>% filter(Name != "Cod"),
-                 cap_filter = 8e+05)
+plot_naa_heatmap(waa_core, by_env = T, tag = "core")
+plot_naa_heatmap(waa_core, by_cap = T, tag = "core")
+plot_naa_heatmap(waa_core, by_wgts = T, tag = "core")
