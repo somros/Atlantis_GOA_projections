@@ -1517,6 +1517,42 @@ plot_revenue <- function(revenue_df){
 #' revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
 #' plot_delta(catch_df, revenue_all)
 #' }
+#' Plot Catch, Biomass, and Revenue Deltas Across Weight Schemes (Decadal Averages)
+#'
+#' @description
+#' Creates stacked bar plots showing decadal average differences in catch, biomass, 
+#' and revenue between capped scenarios and the no-cap baseline (800,000 mt cap) 
+#' across different weight schemes. Also produces a summary table of cumulative differences.
+#'
+#' @param catch_df Data frame. Output from pull_fishery_info() containing
+#'   fishery data across multiple runs and scenarios
+#' @param revenue_df Data frame. Output from calc_revenue() containing
+#'   revenue data across multiple runs and scenarios
+#'
+#' @return NULL (function creates and saves stacked plots and summary table to plotdir)
+#'
+#' @details
+#' Filters to NoClimate scenario only to focus on cap effects without climate
+#' confounding. The 800,000 mt cap baseline (which only has "equal" weights)
+#' is expanded to all weight schemes since caps don't apply at that level.
+#' 
+#' Aggregates to decadal means with standard deviations shown as error bars.
+#' 
+#' Creates three stacked panels:
+#' \itemize{
+#'   \item Catch differences (mt)
+#'   \item Biomass differences (mt)
+#'   \item Revenue differences ($)
+#' }
+#' Each panel is faceted by weight scheme.
+#'
+#' @examples
+#' \dontrun{
+#' price_dat <- read.csv("data/price.csv")
+#' all_runs <- key_config %>% pull(run)
+#' revenue_all <- map_df(all_runs, ~calc_revenue(.x, price_dat))
+#' plot_delta(catch_df, revenue_all)
+#' }
 plot_delta <- function(catch_df, revenue_df){
   
   # Filter to NoClimate only
@@ -1657,7 +1693,8 @@ plot_delta <- function(catch_df, revenue_df){
                   width = 0.2,
                   position = position_dodge(width = 0.9)) +
     scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = unique(catch_biom_decadal$decade)) +
+    scale_x_continuous(breaks = unique(catch_biom_decadal$decade),
+                       labels = seq(2020, 2090, 10)) +
     theme_bw() +
     theme(axis.title.x = element_blank(),
           legend.position = "none",
@@ -1680,7 +1717,8 @@ plot_delta <- function(catch_df, revenue_df){
                   width = 0.2,
                   position = position_dodge(width = 0.9)) +
     scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = unique(revenue_decadal$decade)) +
+    scale_x_continuous(breaks = unique(revenue_decadal$decade),
+                       labels = seq(2020, 2090, 10)) +
     scale_y_continuous(labels = scales::dollar_format()) +
     theme_bw() +
     theme(strip.text = element_text(size = 10)) +
@@ -1952,7 +1990,8 @@ plot_ecosystem_delta <- function(catch_df){
                   width = 0.2,
                   position = position_dodge(width = 0.9)) +
     scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = unique(catch_decadal$decade)) +
+    scale_x_continuous(breaks = unique(catch_decadal$decade),
+                       labels = seq(2020, 2090, 10)) +
     theme_bw() +
     theme(axis.title.x = element_blank(),
           legend.position = "none",
@@ -1975,7 +2014,8 @@ plot_ecosystem_delta <- function(catch_df){
                   width = 0.2,
                   position = position_dodge(width = 0.9)) +
     scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = unique(ecosystem_decadal$decade)) +
+    scale_x_continuous(breaks = unique(ecosystem_decadal$decade),
+                       labels = seq(2020, 2090, 10)) +
     theme_bw() +
     theme(strip.text = element_text(size = 10)) +
     labs(
