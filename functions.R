@@ -952,6 +952,46 @@ get_polprop <- function(this_run){
   return(diet1)
 }
 
+
+
+
+# gets what proportion of the diet of top predators is made up by OY groundfish
+get_dietcomp_preds <- function(this_run){
+  
+  print(this_run)
+  
+  # File paths
+  #wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  wd <- "../v2"
+  dietfile <-  paste0(wd, "/outputGOA_", this_run, "DietCheck.txt")
+  diet <- fread((dietfile))
+  
+  diet1 <- diet %>%
+    mutate(Time = ceiling(Time/365)) %>%
+    filter(Time > 100) %>% # keep the last 10 years only
+    select(-c(Stock, Updated)) %>%
+    pivot_longer(-c(Time, Predator, Cohort), names_to = "Prey", values_to = "comp") %>%
+    filter(Predator %in% c("SSL", "PIN", "DOL", "BDF", "BSF")) %>%
+    group_by(Predator, Cohort, Prey) %>% # average over last 10 years and across age classes for a predator
+    summarise(comp = mean(comp), .groups = "drop") 
+  
+  # check that props add up to 1
+  # diet1 %>% group_by(Predator, Cohort) %>% summarise(check = sum(comp)) %>% pull(check) %>% summary() # OK
+  
+  diet2 <- diet1 %>%
+    mutate(is_oy = ifelse(Prey %in% oy_species, 1, 0)) %>%
+    group_by(Predator, Cohort, is_oy) %>%
+    summarise(comp_agg = sum(comp))
+  
+  diet2 <- diet2 %>% mutate(run = this_run)
+  
+  return(diet2)
+}
+
+
+
+
+
 #' Calculate Ecosystem Indicators from Biomass Output
 #'
 #' @description
@@ -1120,37 +1160,47 @@ plot_ecosystem_indicators <- function(indicators_df){
   # Make palette
   cap_col <- pnw_palette(name="Sunset2", n=length(unique(indicators_df$cap)), type="discrete")
   
+  # filter out what we don't need for this paper
+  indicators_df <- indicators_df %>%
+    filter(wgts != "binary", decade == 10, indicator != "roundfish_to_flatfish", env %in% c("NoClimate", "ssp585"))
+  
   # Time series plot with points and error bars
   p <- indicators_df %>%
-    ggplot(aes(x = decade, y = value_mean, 
+    ggplot(aes(x = env, y = value_mean, 
                color = factor(cap), 
                shape = factor(wgts))) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.5) +
     geom_point(size = 2.5, position = position_dodge(width = 0.3)) +
     geom_errorbar(aes(ymin = value_mean - value_sd, 
                       ymax = value_mean + value_sd),
-                  width = 0.2, alpha = 0.5,
+                  width = 0.2, alpha = 0.9,
                   position = position_dodge(width = 0.3)) +
     scale_color_manual(values = cap_col) +
     scale_shape_manual(values = c(1:length(unique(indicators_df$wgts)))) +
     scale_y_continuous(limits = c(0, NA)) +
-    scale_x_continuous(breaks = unique(indicators_df$decade)) +
+    # scale_x_continuous(breaks = unique(indicators_df$decade)) +
     theme_bw() +
     # theme(
     #   strip.text = element_text(size = 10),
     #   legend.position = "bottom"
     # ) +
     labs(
-      x = "Decade",
+      x = "Climate scenario",
       y = "Indicator value (mean ± SD)",
       color = "Cap (mt)",
-      shape = "Weight scheme",
-      title = "Ecosystem indicators over time"
+      shape = "Weight scheme"
     ) +
-    facet_grid(indicator ~ env, scales = "free_y")
+    facet_wrap(~ indicator, 
+               nrow = 1, 
+               scales = "free_y", 
+               labeller = labeller(indicator = as_labeller(
+                 c("forage_to_oy_spp" = "Forage fish / groundfish", 
+                   "gadids_to_flatfish" = "Gadids / flatfish",
+                   "shrimp_to_oy_spp" = "Shrimp / groundfish")
+               )))
   
   ggsave(paste0(plotdir, "/ecosystem_indicators.png"), p,
-         width = 12, height = length(unique(indicators_df$indicator)) * 1.5,
+         width = 10, height = 3,
          units = "in", dpi = 300)
   
 }
@@ -1684,6 +1734,7 @@ plot_delta <- function(catch_df, revenue_df){
   
   # Create combined catch/biomass plot
   p_catch_biom <- catch_biom_decadal %>%
+    mutate(variable = factor(variable, levels = c("Catch", "Biomass"))) %>%
     ggplot(aes(x = decade, y = delta_mean, fill = factor(cap))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
     geom_bar(stat = "identity", position = position_dodge(),
@@ -1701,8 +1752,8 @@ plot_delta <- function(catch_df, revenue_df){
           strip.text = element_text(size = 10)) +
     labs(
       y = "Difference from no cap (mt)",
-      fill = "Cap (mt)",
-      title = "Impact of ecosystem caps on OY catch, biomass, and revenue (NoClimate scenario)"
+      fill = "Cap (mt)"#,
+      #title = "Impact of ecosystem caps on OY catch, biomass, and revenue (NoClimate scenario)"
     ) +
     facet_grid(variable ~ wgts)
   
@@ -1737,7 +1788,7 @@ plot_delta <- function(catch_df, revenue_df){
     theme(legend.position = "bottom")
   
   ggsave(paste0(plotdir, "/catch_biom_revenue_delta.png"), p_combined,
-         width = 14, height = 10, units = "in", dpi = 300)
+         width = 10, height = 7, units = "in", dpi = 300)
   
   # Create summary table
   summary_table <- delta_filtered %>%
@@ -1981,6 +2032,7 @@ plot_ecosystem_delta <- function(catch_df){
   
   # Create catch plot
   p_catch <- catch_decadal %>%
+    filter(wgts == "equal") %>% # do not need wgts info in this plot
     ggplot(aes(x = decade, y = catch_delta_mean, fill = factor(cap))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
     geom_bar(stat = "identity", position = position_dodge(), 
@@ -1998,13 +2050,13 @@ plot_ecosystem_delta <- function(catch_df){
           strip.text = element_text(size = 10)) +
     labs(
       y = "Catch difference (mt)",
-      fill = "Cap (mt)",
-      title = "Impact of ecosystem caps on OY catch and ecosystem biomass (NoClimate scenario)"
-    ) +
-    facet_wrap(~wgts, nrow = 1)
+      fill = "Cap (mt)"#,
+      #title = "Impact of ecosystem caps on OY catch and ecosystem biomass (NoClimate scenario)"
+    )
   
   # Create ecosystem metrics plot
   p_ecosystem <- ecosystem_decadal %>%
+    filter(wgts == "equal") %>% # do not need wgts info in this plot
     ggplot(aes(x = decade, y = delta_mean, fill = factor(cap))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
     geom_bar(stat = "identity", position = position_dodge(),
@@ -2023,7 +2075,7 @@ plot_ecosystem_delta <- function(catch_df){
       y = "Biomass difference (mt)",
       fill = "Cap (mt)"
     ) +
-    facet_grid(variable ~ wgts, scales = "free_y")
+    facet_wrap(~variable, nrow = 3, scales = "free_y")
   
   # Stack plots using patchwork
   library(patchwork)
@@ -2033,7 +2085,7 @@ plot_ecosystem_delta <- function(catch_df){
     theme(legend.position = "bottom")
   
   ggsave(paste0(plotdir, "/catch_ecosystem_delta.png"), p_combined,
-         width = 14, height = 10, units = "in", dpi = 300)
+         width = 5, height = 8, units = "in", dpi = 300)
   
   # Create summary table
   summary_table <- delta_filtered %>%
@@ -2340,175 +2392,6 @@ calc_weight_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = N
   return(rnsn_summ)
 }
 
-#' Create a heatmap of weight-at-age changes relative to baseline
-#'
-#' This function creates a heatmap visualization showing percentage changes in
-#' weight-at-age data compared to a baseline scenario (NoClimate with equal weights).
-#' The comparison can be made across environmental scenarios, capacity levels, or
-#' weight schemes. The function filters to the last n years, calculates mean weights,
-#' and produces a faceted heatmap saved to disk.
-#'
-#' @param waa_df Data frame containing weight-at-age data with columns: year, Name,
-#'   LongName, age, env, cap, wgts, and weight
-#' @param by_env Logical. If TRUE, plot comparison across environmental scenarios.
-#'   Default is FALSE
-#' @param by_cap Logical. If TRUE, plot comparison across capacity levels.
-#'   Default is FALSE
-#' @param by_wgts Logical. If TRUE, plot comparison across weight schemes.
-#'   Default is FALSE
-#' @param n_years Integer. Number of most recent years to include in the analysis.
-#'   Default is 5
-#' @param tag Character string. Optional tag to append to the output filename.
-#'   Default is NULL
-#'
-#' @return Invisibly returns a data frame of weight-at-age ratios with columns
-#'   including percent_change and ratio. If no data remains after filtering,
-#'   returns NULL with a message
-#'
-#' @details
-#' Exactly one of by_env, by_cap, or by_wgts must be TRUE. The function:
-#' \itemize{
-#'   \item Filters data to integer year values (January 1st)
-#'   \item Calculates mean weights over the last n_years
-#'   \item Compares to baseline: NoClimate scenario, cap=8e+05 (or 4e+05 for by_wgts),
-#'         and equal weights
-#'   \item Creates a diverging color heatmap (blue-white-red) showing percent change
-#'   \item Saves plot to plotdir as PNG (10x5 inches, 300 dpi)
-#' }
-#'
-#' @note Requires ggplot2, dplyr, and colorspace packages. Assumes plotdir is
-#'   defined in the global environment
-#'
-#' @examples
-#' \dontrun{
-#' # Plot by environmental scenario
-#' plot_waa_heatmap(waa_data, by_env = TRUE, n_years = 5, tag = "climate")
-#'
-#' # Plot by capacity level
-#' plot_waa_heatmap(waa_data, by_cap = TRUE, n_years = 10, tag = "capacity")
-#' }
-#'
-#' @export
-plot_waa_heatmap <- function(waa_df, 
-                             by_env = F,
-                             by_cap = F,
-                             by_wgts = F,
-                             n_years = 5,
-                             tag = NULL){
-  
-  if(sum(by_env, by_cap, by_wgts) != 1){
-    stop("You need to plot either by env, cap, or wgts")
-  }
-  
-  # Filter to integer years (Jan 1 values) and weight scheme
-  waa_filtered <- waa_df %>%
-    mutate(year_int = floor(year)) %>%
-    filter(year == year_int)  # Keep only integer year values
-  
-  # Get the last n years
-  max_year <- max(waa_filtered$year_int, na.rm = TRUE)
-  min_year <- max_year - n_years + 1
-  
-  # Filter to last n years and calculate means
-  waa_5y <- waa_filtered %>%
-    filter(year_int >= min_year) %>%
-    group_by(Name, LongName, age, env, cap, wgts) %>%
-    summarise(weight_mean = mean(weight, na.rm = TRUE), .groups = 'drop')
-  
-  # depending on the factoring option, filter the data and make a baseline.
-  # Base conditions:
-  # env = NoClimate
-  # cap = 8e+05 
-  # wgts = equal
-  
-  waa_baseline <- waa_5y %>% 
-    filter(env == "NoClimate", wgts == "equal") %>%
-    rename(weight_baseline = weight_mean)
-  
-  if(by_wgts){
-    waa_baseline <- waa_baseline %>% filter(cap == 4e+05) # you cannot use 800K because there are no wgts there (no cap)
-  } else {
-    waa_baseline <- waa_baseline %>% filter(cap == 8e+05)
-  }
-  
-  # drop cols
-  waa_baseline <- waa_baseline %>%
-    select(-c(env, cap, wgts))
-  
-  if(by_env){
-    
-    # Join with climate scenarios and calculate ratios
-    waa_ratios <- waa_5y %>%
-      filter(env != "NoClimate", cap == 8e+05, wgts == "equal") %>%
-      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = weight_mean / weight_baseline,
-             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
-    
-    lab <-"env"
-    
-  } else if (by_cap) {
-    
-    waa_ratios <- waa_5y %>%
-      filter(env == "NoClimate", cap != 8e+05, wgts == "equal") %>%
-      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = weight_mean / weight_baseline,
-             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
-    
-    lab <- "cap"
-    
-  } else {
-    
-    waa_ratios <- waa_5y %>%
-      filter(env == "NoClimate", cap == 4e+05, wgts != "equal") %>%
-      left_join(waa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = weight_mean / weight_baseline,
-             percent_change = ((weight_mean - weight_baseline) / weight_baseline) * 100)
-    
-    lab <- "wgts"
-
-  }
-
-  
-  # Check if we have data
-  if(nrow(waa_ratios) == 0) {
-    message("No data to plot after filtering")
-    return(NULL)
-  }
-  
-  # Create heatmap
-  p <- waa_ratios %>%
-    ggplot() +
-    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
-    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
-                                                 oob = scales::squish) + 
-    theme_bw() +
-    scale_x_continuous(breaks = seq(1, max(waa_ratios$age, na.rm = TRUE))) +
-    labs(x = 'Age class', 
-         y = '', 
-         fill = '% change\nfrom\nbaseline',
-         title = paste0('Relative change in weight-at-age - ', lab)) +
-    theme(panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          strip.text = element_text(size = 10))
-  
-  if(by_env){
-    p <- p + facet_grid(~ env)
-  } else if (by_cap) {
-    p <- p + facet_grid(~ cap)
-  } else {
-    p <- p + facet_grid(~ wgts)
-  }
-  
-  ggsave(paste0(plotdir, "/heatmaps/waa_heatmap_", lab, "_", tag, ".png"), 
-         p, 
-         width = 10, 
-         height = 5, 
-         units = "in", dpi = 300)
-  
-  # Return the data for inspection if needed
-  invisible(waa_ratios)
-}
-
 #' Extract Numbers-at-Age from NetCDF Output
 #'
 #' @description
@@ -2621,16 +2504,20 @@ calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = 
   return(abun_summ)
 }
 
-#' Create a heatmap of numbers-at-age changes relative to baseline
+#' Create a heatmap of weight-at-age and/or numbers-at-age changes relative to baseline
 #'
-#' This function creates a heatmap visualization showing percentage changes in
-#' numbers-at-age data compared to a baseline scenario (NoClimate with equal weights).
-#' The comparison can be made across environmental scenarios, capacity levels, or
-#' weight schemes. The function filters to the last n years, calculates mean abundances,
-#' and produces a faceted heatmap saved to disk.
+#' This function creates heatmap visualizations showing percentage changes in
+#' weight-at-age and/or numbers-at-age data compared to a baseline scenario 
+#' (NoClimate with equal weights). The comparison can be made across environmental 
+#' scenarios, capacity levels, or weight schemes. When plotting both metrics, they
+#' are stacked vertically using faceting.
 #'
+#' @param waa_df Data frame containing weight-at-age data with columns: year, Name,
+#'   LongName, age, env, cap, wgts, and weight. Required if plot_type is "WAA" or "both"
 #' @param naa_df Data frame containing numbers-at-age data with columns: year, Name,
-#'   LongName, age, env, cap, wgts, and abun
+#'   LongName, age, env, cap, wgts, and abun. Required if plot_type is "NAA" or "both"
+#' @param plot_type Character. One of "WAA", "NAA", or "both". Determines which
+#'   metric(s) to plot. Default is "both"
 #' @param by_env Logical. If TRUE, plot comparison across environmental scenarios.
 #'   Default is FALSE
 #' @param by_cap Logical. If TRUE, plot comparison across capacity levels.
@@ -2642,19 +2529,237 @@ calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = 
 #' @param tag Character string. Optional tag to append to the output filename.
 #'   Default is NULL
 #'
-#' @return Invisibly returns a data frame of numbers-at-age ratios with columns
-#'   including percent_change and ratio. If no data remains after filtering,
+#' @return Invisibly returns a combined data frame containing ratio data with a 
+#'   'metric' column indicating WAA or NAA. If no data remains after filtering, 
 #'   returns NULL with a message
 #'
 #' @details
 #' Exactly one of by_env, by_cap, or by_wgts must be TRUE. The function:
 #' \itemize{
 #'   \item Filters data to integer year values (January 1st)
-#'   \item Calculates mean abundances over the last n_years
+#'   \item Calculates mean values over the last n_years
+#'   \item Compares to baseline: NoClimate scenario, cap=8e+05 (or 4e+05 for by_wgts),
+#'         and equal weights
+#'   \item Creates diverging color heatmap(s) (blue-white-red) showing percent change
+#'   \item Saves plot to plotdir as PNG (10x height, 300 dpi)
+#' }
+#'
+#' @note Requires ggplot2, dplyr, and colorspace packages. Assumes plotdir 
+#'   is defined in the global environment
+#'
+#' @examples
+#' \dontrun{
+#' # Plot both WAA and NAA by environmental scenario
+#' plot_age_heatmap(waa_data, naa_data, plot_type = "both", 
+#'                  by_env = TRUE, n_years = 5, tag = "climate")
+#'
+#' # Plot only WAA by capacity level
+#' plot_age_heatmap(waa_df = waa_data, plot_type = "WAA",
+#'                  by_cap = TRUE, n_years = 10, tag = "capacity")
+#' }
+#'
+#' @export
+plot_age_heatmap <- function(waa_df = NULL, 
+                             naa_df = NULL,
+                             plot_type = c("both", "WAA", "NAA"),
+                             by_env = FALSE,
+                             by_cap = FALSE,
+                             by_wgts = FALSE,
+                             n_years = 5,
+                             tag = NULL) {
+  
+  # Validate inputs
+  plot_type <- match.arg(plot_type)
+  
+  if(sum(by_env, by_cap, by_wgts) != 1) {
+    stop("You need to plot either by env, cap, or wgts")
+  }
+  
+  if(plot_type %in% c("WAA", "both") && is.null(waa_df)) {
+    stop("waa_df is required when plot_type is 'WAA' or 'both'")
+  }
+  
+  if(plot_type %in% c("NAA", "both") && is.null(naa_df)) {
+    stop("naa_df is required when plot_type is 'NAA' or 'both'")
+  }
+  
+  # Determine label for faceting and filename
+  if(by_env) {
+    lab <- "env"
+    facet_var <- "env"
+  } else if(by_cap) {
+    lab <- "cap"
+    facet_var <- "cap"
+  } else {
+    lab <- "wgts"
+    facet_var <- "wgts"
+  }
+  
+  # Helper function to process data
+  process_age_data <- function(df, value_col, metric_name) {
+    
+    # Filter to integer years (Jan 1 values)
+    df_filtered <- df %>%
+      mutate(year_int = floor(year)) %>%
+      filter(year == year_int)
+    
+    # Get the last n years
+    max_year <- max(df_filtered$year_int, na.rm = TRUE)
+    min_year <- max_year - n_years + 1
+    
+    # Filter to last n years and calculate means
+    df_ny <- df_filtered %>%
+      filter(year_int >= min_year) %>%
+      group_by(Name, LongName, age, env, cap, wgts) %>%
+      summarise(value_mean = mean(.data[[value_col]], na.rm = TRUE), .groups = 'drop')
+    
+    # Create baseline
+    df_baseline <- df_ny %>% 
+      filter(env == "NoClimate", wgts == "equal") %>%
+      rename(value_baseline = value_mean)
+    
+    if(by_wgts) {
+      df_baseline <- df_baseline %>% filter(cap == 4e+05)
+    } else {
+      df_baseline <- df_baseline %>% filter(cap == 8e+05)
+    }
+    
+    df_baseline <- df_baseline %>%
+      select(-c(env, cap, wgts))
+    
+    # Calculate ratios based on comparison type
+    if(by_env) {
+      df_ratios <- df_ny %>%
+        filter(env != "NoClimate", cap == 8e+05, wgts == "equal")
+    } else if(by_cap) {
+      df_ratios <- df_ny %>%
+        filter(env == "NoClimate", cap != 8e+05, wgts == "equal")
+    } else {
+      df_ratios <- df_ny %>%
+        filter(env == "NoClimate", cap == 4e+05, wgts != "equal")
+    }
+    
+    df_ratios <- df_ratios %>%
+      left_join(df_baseline, by = c("Name", "LongName", "age")) %>%
+      mutate(ratio = value_mean / value_baseline,
+             percent_change = ((value_mean - value_baseline) / value_baseline) * 100,
+             metric = metric_name)
+    
+    return(df_ratios)
+  }
+  
+  # Process data and combine
+  ratio_list <- list()
+  
+  if(plot_type %in% c("WAA", "both")) {
+    waa_ratios <- process_age_data(waa_df, "weight", "Weight-at-Age")
+    if(nrow(waa_ratios) > 0) {
+      ratio_list$waa <- waa_ratios
+    } else {
+      message("No WAA data to plot after filtering")
+    }
+  }
+  
+  if(plot_type %in% c("NAA", "both")) {
+    naa_ratios <- process_age_data(naa_df, "abun", "Numbers-at-Age")
+    if(nrow(naa_ratios) > 0) {
+      ratio_list$naa <- naa_ratios
+    } else {
+      message("No NAA data to plot after filtering")
+    }
+  }
+  
+  # Check if we have any data to plot
+  if(length(ratio_list) == 0) {
+    message("No data to plot after filtering")
+    return(NULL)
+  }
+  
+  # Combine the data frames
+  combined_ratios <- bind_rows(ratio_list)
+  
+  # Create the plot
+  p <- combined_ratios %>%
+    ggplot() +
+    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
+                                                 oob = scales::squish,
+                                                 breaks = scales::pretty_breaks(n = 10),
+                                                 guide = guide_colorbar(barheight = unit(0.8, "npc"),
+                                                                        barwidth = unit(0.5, "cm"),
+                                                                        ticks.linewidth = 0.5)) +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(1, max(combined_ratios$age, na.rm = TRUE))) +
+    labs(x = 'Age class', 
+         y = '', 
+         fill = '% change\nfrom\nbaseline') +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          strip.text = element_text(size = 10))
+  
+  # Add faceting based on whether we're plotting one or both metrics
+  if(plot_type == "both" && length(ratio_list) == 2) {
+    # Facet by metric (rows) and comparison variable (columns)
+    p <- p + facet_grid(reformulate(facet_var, "metric"))
+    plot_height <- 4
+    filename <- paste0(plotdir, "/heatmaps/age_heatmap_", lab, "_", tag, ".png")
+  } else {
+    # Facet only by comparison variable
+    p <- p + facet_grid(reformulate(facet_var, "."))
+    plot_height <- 3
+    
+    # Determine filename based on which metric we actually plotted
+    if(!is.null(ratio_list$waa)) {
+      filename <- paste0(plotdir, "/heatmaps/waa_heatmap_", lab, "_", tag, ".png")
+    } else {
+      filename <- paste0(plotdir, "/heatmaps/naa_heatmap_", lab, "_", tag, ".png")
+    }
+  }
+  
+  # Save the plot
+  ggsave(filename, 
+         p, 
+         width = 10, 
+         height = plot_height, 
+         units = "in", 
+         dpi = 300)
+  
+  # Return the combined data for inspection if needed
+  invisible(combined_ratios)
+}
+
+#' Create a heatmap of predator diet composition changes relative to baseline
+#'
+#' This function creates heatmap visualizations showing percentage changes in
+#' diet composition compared to a baseline scenario (NoClimate with equal weights).
+#' The comparison can be made across environmental scenarios, capacity levels, or
+#' weight schemes.
+#'
+#' @param diet_df Data frame containing diet composition data with columns: Predator,
+#'   Cohort, is_oy, comp_agg, Name, env, cap, wgts
+#' @param predator Character. Optional predator code to filter to a single predator.
+#'   If NULL (default), plots all predators with predator as a facet row
+#' @param by_env Logical. If TRUE, plot comparison across environmental scenarios.
+#'   Default is FALSE
+#' @param by_cap Logical. If TRUE, plot comparison across capacity levels.
+#'   Default is FALSE
+#' @param by_wgts Logical. If TRUE, plot comparison across weight schemes.
+#'   Default is FALSE
+#' @param tag Character string. Optional tag to append to the output filename.
+#'   Default is NULL
+#'
+#' @return Invisibly returns a data frame of diet composition ratios with columns
+#'   including percent_change and ratio. If no data remains after filtering,
+#'   returns NULL with a message
+#'
+#' @details
+#' Exactly one of by_env, by_cap, or by_wgts must be TRUE. The function:
+#' \itemize{
+#'   \item Filters data to is_oy == 1
 #'   \item Compares to baseline: NoClimate scenario, cap=8e+05 (or 4e+05 for by_wgts),
 #'         and equal weights
 #'   \item Creates a diverging color heatmap (blue-white-red) showing percent change
-#'   \item Saves plot to plotdir as PNG (10x5 inches, 300 dpi)
+#'   \item Saves plot to plotdir as PNG (10x height, 300 dpi)
 #' }
 #'
 #' @note Requires ggplot2, dplyr, and colorspace packages. Assumes plotdir is
@@ -2662,128 +2767,113 @@ calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = 
 #'
 #' @examples
 #' \dontrun{
-#' # Plot by environmental scenario
-#' plot_naa_heatmap(naa_data, by_env = TRUE, n_years = 5, tag = "climate")
+#' # Plot all predators by environmental scenario
+#' plot_diet_heatmap(pred_diets, by_env = TRUE, tag = "climate")
 #'
-#' # Plot by capacity level
-#' plot_naa_heatmap(naa_data, by_cap = TRUE, n_years = 10, tag = "capacity")
+#' # Plot single predator by capacity level
+#' plot_diet_heatmap(pred_diets, predator = "BDF", by_cap = TRUE, tag = "capacity")
 #' }
 #'
 #' @export
-plot_naa_heatmap <- function(naa_df, 
-                             by_env = F,
-                             by_cap = F,
-                             by_wgts = F,
-                             n_years = 5,
-                             tag = NULL){
+plot_diet_heatmap <- function(diet_df,
+                              by_env = FALSE,
+                              by_cap = FALSE,
+                              by_wgts = FALSE,
+                              tag = NULL) {
   
-  if(sum(by_env, by_cap, by_wgts) != 1){
+  # Validate inputs
+  if(sum(by_env, by_cap, by_wgts) != 1) {
     stop("You need to plot either by env, cap, or wgts")
   }
   
-  # Filter to integer years (Jan 1 values) and weight scheme
-  naa_filtered <- naa_df %>%
-    mutate(year_int = floor(year)) %>%
-    filter(year == year_int)  # Keep only integer year values
-  
-  # Get the last n years
-  max_year <- max(naa_filtered$year_int, na.rm = TRUE)
-  min_year <- max_year - n_years + 1
-  
-  # Filter to last n years and calculate means
-  naa_5y <- naa_filtered %>%
-    filter(year_int >= min_year) %>%
-    group_by(Name, LongName, age, env, cap, wgts) %>%
-    summarise(abun_mean = mean(abun, na.rm = TRUE), .groups = 'drop')
-  
-  # depending on the factoring option, filter the data and make a baseline.
-  # Base conditions:
-  # env = NoClimate
-  # cap = 8e+05 
-  # wgts = equal
-  
-  naa_baseline <- naa_5y %>% 
-    filter(env == "NoClimate", wgts == "equal") %>%
-    rename(abun_baseline = abun_mean)
-  
-  if(by_wgts){
-    naa_baseline <- naa_baseline %>% filter(cap == 4e+05) # you cannot use 800K because there are no wgts there (no cap)
-  } else {
-    naa_baseline <- naa_baseline %>% filter(cap == 8e+05)
-  }
-  
-  # drop cols
-  naa_baseline <- naa_baseline %>%
-    select(-c(env, cap, wgts))
-  
-  if(by_env){
-    
-    # Join with climate scenarios and calculate ratios
-    naa_ratios <- naa_5y %>%
-      filter(env != "NoClimate", cap == 8e+05, wgts == "equal") %>%
-      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = abun_mean / abun_baseline,
-             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
-    
+  # Determine label for faceting and filename
+  if(by_env) {
     lab <- "env"
-    
-  } else if (by_cap) {
-    
-    naa_ratios <- naa_5y %>%
-      filter(env == "NoClimate", cap != 8e+05, wgts == "equal") %>%
-      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = abun_mean / abun_baseline,
-             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
-    
+    facet_var <- "env"
+  } else if(by_cap) {
     lab <- "cap"
-    
+    facet_var <- "cap"
   } else {
-    
-    naa_ratios <- naa_5y %>%
-      filter(env == "NoClimate", cap == 4e+05, wgts != "equal") %>%
-      left_join(naa_baseline, by = c("Name", "LongName", "age")) %>%
-      mutate(ratio = abun_mean / abun_baseline,
-             percent_change = ((abun_mean - abun_baseline) / abun_baseline) * 100)
-    
     lab <- "wgts"
+    facet_var <- "wgts"
   }
+  
+  # Filter to is_oy == 1
+  diet_filtered <- diet_df %>%
+    filter(is_oy == 1)
+  
+  # Create baseline
+  # Base conditions: env = NoClimate, cap = 8e+05, wgts = equal
+  diet_baseline <- diet_filtered %>% 
+    filter(env == "NoClimate", wgts == "equal") %>%
+    rename(comp_baseline = comp_agg)
+  
+  if(by_wgts) {
+    diet_baseline <- diet_baseline %>% filter(cap == 4e+05)
+  } else {
+    diet_baseline <- diet_baseline %>% filter(cap == 8e+05)
+  }
+  
+  # Drop unnecessary cols
+  diet_baseline <- diet_baseline %>%
+    select(-c(env, cap, wgts, is_oy, run))
+  
+  # Calculate ratios based on comparison type
+  if(by_env) {
+    diet_ratios <- diet_filtered %>%
+      filter(env != "NoClimate", cap == 8e+05, wgts == "equal")
+  } else if(by_cap) {
+    diet_ratios <- diet_filtered %>%
+      filter(env == "NoClimate", cap != 8e+05, wgts == "equal")
+  } else {
+    diet_ratios <- diet_filtered %>%
+      filter(env == "NoClimate", cap == 4e+05, wgts != "equal")
+  }
+  
+  diet_ratios <- diet_ratios %>%
+    left_join(diet_baseline, by = c("Predator", "Cohort", "Name")) %>%
+    mutate(ratio = comp_agg / comp_baseline,
+           percent_change = ((comp_agg - comp_baseline) / comp_baseline) * 100)
   
   # Check if we have data
-  if(nrow(naa_ratios) == 0) {
+  if(nrow(diet_ratios) == 0) {
     message("No data to plot after filtering")
     return(NULL)
   }
   
   # Create heatmap
-  p <- naa_ratios %>%
+  p <- diet_ratios %>%
     ggplot() +
-    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+    geom_tile(aes(x = Cohort, y = Name, fill = percent_change), color = 'darkgrey') +
     colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
-                                                 oob = scales::squish) + 
+                                                 oob = scales::squish,
+                                                 breaks = scales::pretty_breaks(n = 10),
+                                                 guide = guide_colorbar(barheight = unit(0.8, "npc"),
+                                                                        barwidth = unit(0.5, "cm"),
+                                                                        ticks.linewidth = 0.5)) + 
     theme_bw() +
-    scale_x_continuous(breaks = seq(1, max(naa_ratios$age, na.rm = TRUE))) +
-    labs(x = 'Age class', 
+    scale_x_continuous(breaks = seq(0, max(diet_ratios$Cohort, na.rm = TRUE))) +
+    labs(x = 'Cohort', 
          y = '', 
-         fill = '% change\nfrom\nbaseline',
-         title = paste0('Relative change in numbers-at-age - ', lab)) +
+         fill = '% change\nfrom\nbaseline') +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           strip.text = element_text(size = 10))
   
-  if(by_env){
-    p <- p + facet_grid(~ env)
-  } else if (by_cap) {
-    p <- p + facet_grid(~ cap)
-  } else {
-    p <- p + facet_grid(~ wgts)
-  }
+  p <- p + facet_grid(reformulate(facet_var, "."))
   
-  ggsave(paste0(plotdir, "/heatmaps/naa_heatmap_", lab, "_", tag, ".png"), 
+  # Determine filename
+  pred_tag <- if(!is.null(predator)) paste0("_", predator) else ""
+  filename <- paste0(plotdir, "/heatmaps/diet_heatmap_", lab, pred_tag, "_", tag, ".png")
+  
+  # Save the plot
+  ggsave(filename, 
          p, 
          width = 10, 
-         height = 5, 
-         units = "in", dpi = 300)
+         height = 3, 
+         units = "in", 
+         dpi = 300)
   
-  # Return the data for inspection if needed
-  invisible(naa_ratios)
+  # Return the data for inspection
+  invisible(diet_ratios)
 }

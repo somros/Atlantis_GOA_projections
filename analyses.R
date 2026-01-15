@@ -228,9 +228,38 @@ catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","attainment-b
 
 plot_fishery(catch_df %>% filter(wgts != "binary"))
 
-# Catch delta -------------------------------------------------------------
 
-plot_catch_delta(catch_df)
+# Plot OY rescaling only --------------------------------------------------
+
+resc_plot_sp <- c("POL", "COD","ATF")
+
+cap_col <- pnw_palette(name="Sunset2",n=length(unique(catch_df$cap)),type="discrete")
+
+resc_plot <- catch_df %>%
+  filter(wgts != "binary") %>%
+  filter(env == "NoClimate") %>%
+  filter(Time > 0) %>%
+  filter(Time >= burnin*365) %>%
+  filter(Code %in% resc_plot_sp) %>%
+  filter(!is.na(catch_mt)) %>%
+  ggplot(aes(x = (Time/365)+1990, y = oy_rescale, color = factor(cap), linetype = factor(wgts))) +
+  # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
+  #          fill = "grey", alpha = 0.3) +
+  geom_line(linewidth = 0.85) +
+  scale_color_manual(values = cap_col)+
+  scale_linetype_manual(values = c("solid","dashed","dotted"))+
+  scale_x_continuous(breaks = c(seq(1990,2100,10))) +
+  scale_y_continuous(limits = c(0,NA)) +
+  facet_grid(~ Name) +
+  labs(x = "Year", 
+       y = "",
+       color = "Cap (mt)",
+       linetype = "Weight scheme") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(paste0(plotdir, "/", "resc_plot.png"), resc_plot, width = 10, height = 3.5, dpi = 300, units = "in")
 
 # Shannon Index -----------------------------------------------------------
 h_frame <- data.frame() # initialize df
@@ -334,24 +363,6 @@ indicators_all <- map_df(run, ~{
 # Create plots
 plot_ecosystem_indicators(indicators_all)
 
-# Single specific scenario
-# I do not think these plots are effective
-# plot_ecosystem_indicators_radar(indicators_all, 
-#                                 cap_filter = 4e+05, 
-#                                 env_filter = "ssp585", 
-#                                 decade_filter = 3)
-# 
-# # All decades for one cap and env (3 plots in a row)
-# plot_ecosystem_indicators_radar(indicators_all, 
-#                                 cap_filter = 4e+05, 
-#                                 env_filter = "NoClimate")
-# 
-# # Compare environments for one cap and decade (2 plots)
-# plot_ecosystem_indicators_radar(indicators_all, 
-#                                 cap_filter = 4e+05, 
-#                                 decade_filter = 9)
-
-
 # Economic indicators -----------------------------------------------------
 
 # Load price data
@@ -373,7 +384,7 @@ revenue_all$wgts <- factor(revenue_all$wgts, levels = c("equal","binary","attain
 # Create plot
 plot_revenue(revenue_all %>% filter(wgts != "binary"))
 
-# Tradeoff ----------------------------------------------------------------
+# Tradeoff plots ----------------------------------------------------------------
 
 plot_delta(catch_df, revenue_df = revenue_all)
 
@@ -396,22 +407,33 @@ plot_ltl_biomass(ltl_biomass_all %>%
                    filter(wgts != "binary") %>%
                    filter(Time %% 365 == 0))
 
-# WAA ---------------------------------------------------------------------
+# WAA / NAA ---------------------------------------------------------------------
 
 # this takes time
 
 # For all runs with specific species
 these_names <- c("Pollock", "Cod", "Arrowtooth_flounder", "Sablefish", "Pacific_ocean_perch" )
-# waa_pollock <- map_df(run, ~calc_weight_at_age(.x, sp_names = "Pollock"))
+
 waa_core <- map_df(run, ~calc_weight_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
+naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
 
 # plot
-# For all species at default cap (8e+05)
-# plot_waa_heatmap(waa_pollock)
-# plot
-plot_waa_heatmap(waa_core, by_env = T, tag = "core")
-plot_waa_heatmap(waa_core, by_cap = T, tag = "core")
-plot_waa_heatmap(waa_core, by_wgts = T, tag = "core")
+# Comparisons plotted against these defaults:
+# Env: NoClimate
+# Cap: 800K, unless you are comparing wgts scheme
+# Wgts: equal and 400K cap (no wgts at 800K) 
+
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core")
+
+plot_age_heatmap(waa_core, plot_type = "WAA", by_env = T, tag = "core")
+plot_age_heatmap(waa_core, plot_type = "WAA", by_cap = T, tag = "core")
+plot_age_heatmap(waa_core, plot_type = "WAA", by_wgts = T, tag = "core")
+
+plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_env = T, tag = "core")
+plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_cap = T, tag = "core")
+plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core")
 
 # do it for top predators
 # For all runs with specific species
@@ -419,17 +441,17 @@ preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surfac
 waa_pred <- map_df(run, ~calc_weight_at_age(.x, sp_names = preds, boundary_boxes = boundary_boxes))
 
 # plot
-plot_waa_heatmap(waa_pred, by_env = T, tag = "pred")
-plot_waa_heatmap(waa_pred, by_cap = T, tag = "pred")
-plot_waa_heatmap(waa_pred, by_wgts = T, tag = "pred")
+plot_age_heatmap(waa_pred, plot_type = "WAA", by_env = T, tag = "pred")
+plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred")
+plot_age_heatmap(waa_pred, plot_type = "WAA", by_wgts = T, tag = "pred")
 
-# NAA ---------------------------------------------------------------------
+# Top pred diets -----------------------------------------------------------------
 
-naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
+pred_diets <- bind_rows(lapply(run, get_dietcomp_preds))
+pred_diets <- pred_diets %>%
+  filter(is_oy > 0) %>%
+  left_join(grps %>% select(Code, Name), by = c("Predator"="Code")) %>%
+  left_join(key_config, by = "run")
 
-# plot
-# For all species at default cap (8e+05)
-# plot_waa_heatmap(waa_pollock)
-plot_naa_heatmap(waa_core, by_env = T, tag = "core")
-plot_naa_heatmap(waa_core, by_cap = T, tag = "core")
-plot_naa_heatmap(waa_core, by_wgts = T, tag = "core")
+# All predators by capacity
+plot_diet_heatmap(pred_diets, by_cap = TRUE, tag = "test")
