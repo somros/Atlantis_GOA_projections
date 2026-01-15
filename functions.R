@@ -319,8 +319,8 @@ plot_fishery <- function(catch_df){
   
   # total catch against cap
   p1 <- catch_df %>%
-    filter(Time > 0) %>%
-    #filter(Time >= burnin*365) %>%
+    # filter(Time > 0) %>%
+    filter(Time >= burnin*365+1) %>%
     filter(!is.na(catch_mt)) %>%
     group_by(Time,run,cap,wgts,env) %>%
     summarise(catch_tot = sum(catch_mt),
@@ -328,27 +328,33 @@ plot_fishery <- function(catch_df){
     ungroup() %>%
     pivot_longer(-c(Time:env)) %>%
     ggplot(aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts)))+
-    annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
-             fill = "grey", alpha = 0.3) +
+    # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
+    #          fill = "grey", alpha = 0.3) +
     geom_line(linewidth = 0.5)+
     scale_color_manual(values = cap_col)+
     #scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     scale_linetype_manual(values = c("solid","dashed","dotted"))+
-    geom_hline(aes(yintercept = as.numeric(as.character(cap))), linetype = "dashed", linewidth = 0.25)+
-    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
+    geom_hline(data = ~ filter(., name == "catch_tot"),
+               aes(yintercept = as.numeric(as.character(cap))), 
+               linetype = "dashed", 
+               linewidth = 0.25)+    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     theme_bw()+
-    scale_x_continuous(breaks = c(seq(1990,2100,10)))+
+    # scale_x_continuous(breaks = c(seq(1990,2100,10)))+
+    scale_x_continuous(breaks = c(seq(2020,2100,10)))+
     scale_y_continuous(limits = c(0,NA))+
     theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-    labs(x = "Year", 
-         y = "mt",
+    labs(x = "", 
+         y = "Metric tons",
          color = "Cap (mt)",
-         linetype = "Weight scheme",
-         title = "Total biomass and catch of OY species")+
-    facet_grid(name~env, scales = "free_y")
+         linetype = "Weight scheme")+
+    facet_grid(name~env, scales = "free_y",
+               labeller = labeller(name = as_labeller(
+                 c("biom_tot" = "SSB", 
+                   "catch_tot" = "Catch")
+               )))
   
   ggsave(paste0(plotdir, "/", "oy_tot.png"), p1, 
-         width = 9, height = 5,  
+         width = 10, height = 4.5,  
          units = "in", dpi = 300)
   
   # by species, biom fraction (need B0), f fraction, catch, biomass (selected), exploitation rate, ...?
@@ -371,13 +377,15 @@ plot_fishery <- function(catch_df){
     # drop the f_frac panel, redundant with the OY rescale panel mostly and we have the HCR information in the dedicated plots
     p_df <- p_df %>% filter(name != "f_frac")
     
-    p_tmp <- ggplot(data = p_df, aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts))) +
-      annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
-               fill = "grey", alpha = 0.3) +
+    p_tmp <- ggplot(data = p_df %>% filter(Time > burnin*365+1), 
+                    aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts))) +
+      # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
+      #          fill = "grey", alpha = 0.3) +
       geom_line(linewidth = 0.5) +
       scale_color_manual(values = cap_col)+
       scale_linetype_manual(values = c("solid","dashed","dotted"))+
-      scale_x_continuous(breaks = c(seq(1990,2100,10))) +
+      # scale_x_continuous(breaks = c(seq(1990,2100,10))) +
+      scale_x_continuous(breaks = c(seq(2020,2100,10))) +
       scale_y_continuous(limits = c(0,NA)) +
       geom_hline(data = data.frame(name = "biom_frac", 
                                    env = unique(catch_df$env)),
@@ -393,7 +401,7 @@ plot_fishery <- function(catch_df){
       # geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
       facet_grid2(env ~ name, scales = "free_y", independent = "y") +
       labs(title = current_name,
-           x = "Year", 
+           x = "", 
            y = "",
            color = "Cap (mt)",
            linetype = "Weight scheme") +
@@ -547,58 +555,43 @@ plot_fishery <- function(catch_df){
   #   facet_grid(env~factor(cap))
   
   # alternative version
-  catch_df %>%
-    filter(Time >= burnin*365) %>%
-    filter(!is.na(catch_mt)) %>%
-    group_by(Time, run, cap, wgts, env) %>%
-    summarise(biom_mt_tot = sum(biom_mt_tot), .groups = 'drop') %>%
-    mutate(decade = floor(Time/365/10)) %>%  # Create decade variable
-    filter(decade %in% c(3,10)) %>%  # Filter to decades 3, 10 (beginning and end of run)
-    group_by(decade, run, cap, wgts, env) %>%
-    summarise(
-      biom_mt_tot_mean = mean(biom_mt_tot),
-      biom_mt_tot_sd = sd(biom_mt_tot),
-      .groups = 'drop'
-    )
-  
   p4 <- pol_vs_atf %>%
     filter(Time >= burnin*365, !is.na(f_ratio)) %>%
     mutate(decade = floor(Time/365/10)) %>%
-    filter(decade %in% c(3, 10)) %>%
+    # filter(decade %in% c(3, 10)) %>%
+    filter(decade == 10, wgts != "binary") %>%
     group_by(decade, run, cap, wgts, env) %>%
     summarise(across(c(biom_pol, f_pol, biom_atf, f_atf, f_ratio),
                      list(mean = mean, sd = sd),
                      .names = "{.col}_{.fn}"),
               .groups = 'drop') %>%
-    filter(cap == "2e+05") %>%
+    filter(cap == "2e+05") %>% # because it is the only cap where catch streams from different wgts schemes still diverge at the end (other caps have become unconstraining)
     ggplot(aes(x = biom_atf_mean, y = biom_pol_mean, color = f_atf_mean, shape = factor(wgts)))+
     geom_errorbar(aes(ymin = biom_pol_mean - biom_pol_sd, 
                       ymax = biom_pol_mean + biom_pol_sd), 
-                  width = 0.02, alpha = 0.5) +
+                  width = 0, alpha = 0.9) +
     geom_errorbarh(aes(xmin = biom_atf_mean - biom_atf_sd, 
                        xmax = biom_atf_mean + biom_atf_sd), 
-                   height = 0.02, alpha = 0.5) +
+                   height = 0, alpha = 0.9) +
     geom_line(aes(group = interaction(decade, cap))) +
     geom_point(aes(shape = factor(wgts)), size = 1.5)+
     scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
-    viridis::scale_color_viridis(option = "cividis", begin = 0.05, end = 0.95)+
+    viridis::scale_color_viridis(option = "cividis", begin = 0.2, end = 0.8)+
     theme_bw()+
-    # scale_x_continuous(limits = c(0,NA))+
-    # scale_y_continuous(limits = c(0,NA))+
     labs(x = "Arrowtooth B/B0",
          y = "Pollock B/B0",
          shape = "Weight scheme",
          color = "F(atf)",
          title = "Pollock-arrowtooth tradeoffs")+
-    facet_grid(env ~ decade, 
-               labeller = labeller(decade = as_labeller(
-                 c("3" = "2020-2029", 
-                   "10" = "2090-2099")
-               )))
+    facet_grid(~ env)#, 
+               # labeller = labeller(decade = as_labeller(
+               #   c("3" = "2020-2029", 
+               #     "10" = "2090-2099")
+               # )))
 
   
   ggsave(paste0(plotdir, "/pol_vs_atf.png"), p4, 
-         width = 10, height = 5, 
+         width = 10, height = 3, 
          units = "in", dpi = 300)
   
   # plot quantities relative to reference points and ecosystem indicators
@@ -952,10 +945,47 @@ get_polprop <- function(this_run){
   return(diet1)
 }
 
-
-
-
-# gets what proportion of the diet of top predators is made up by OY groundfish
+#' Calculate diet composition of OY groundfish for top predators
+#'
+#' Extracts and processes diet composition data from Atlantis model output to 
+#' determine what proportion of top predator diets (Steller sea lions, pinnipeds, 
+#' dolphins, and select demersal fish) consists of overfished/overfishing (OY) 
+#' groundfish species. Results are averaged over the last 10 years of the simulation.
+#'
+#' @param this_run Character string specifying the Atlantis run identifier used to 
+#'   locate the appropriate DietCheck.txt output file
+#'
+#' @return A tibble with the following columns:
+#'   \itemize{
+#'     \item \code{Predator}: Predator functional group code
+#'     \item \code{Cohort}: Age cohort (0-indexed)
+#'     \item \code{is_oy}: Binary indicator (1 = OY species)
+#'     \item \code{comp_agg}: Aggregated diet composition (proportion)
+#'     \item \code{run}: Run identifier
+#'     \item \code{Age class}: Age class (1-indexed, Cohort + 1)
+#'     \item \code{LongName}: Full name of predator group
+#'     \item Additional columns from \code{key_config} joined by run
+#'   }
+#'
+#' @details 
+#' The function:
+#' \itemize{
+#'   \item Reads DietCheck.txt output from the specified Atlantis run
+#'   \item Filters for the last 10 years of simulation (Time > 100)
+#'   \item Focuses on five top predator groups: SSL, PIN, DOL, BDF, BSF
+#'   \item Averages diet composition across years and age cohorts
+#'   \item Identifies prey items in the OY groundfish category (defined in \code{oy_species})
+#'   \item Returns only rows where OY species are present in the diet
+#' }
+#' 
+#' @note Requires the following objects to be available in the environment:
+#'   \code{oy_species}, \code{grps}, and \code{key_config}
+#'
+#' @examples
+#' \dontrun{
+#' diet_comp <- get_dietcomp_preds("1043")
+#' }
+#'
 get_dietcomp_preds <- function(this_run){
   
   print(this_run)
@@ -983,13 +1013,14 @@ get_dietcomp_preds <- function(this_run){
     group_by(Predator, Cohort, is_oy) %>%
     summarise(comp_agg = sum(comp))
   
-  diet2 <- diet2 %>% mutate(run = this_run)
+  diet2 <- diet2 %>% mutate(run = this_run) %>%
+    filter(is_oy > 0) %>%
+    mutate(`Age class` = Cohort + 1) %>%
+    left_join(grps %>% select(Code, LongName), by = c("Predator"="Code")) %>%
+    left_join(key_config, by = "run")
   
   return(diet2)
 }
-
-
-
 
 
 #' Calculate Ecosystem Indicators from Biomass Output
@@ -2678,21 +2709,21 @@ plot_age_heatmap <- function(waa_df = NULL,
   # Combine the data frames
   combined_ratios <- bind_rows(ratio_list)
   
+  # order caps
+  combined_ratios$cap <- factor(combined_ratios$cap, levels = c("6e+05", "4e+05", "2e+05"))
+  
   # Create the plot
   p <- combined_ratios %>%
     ggplot() +
     geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
     colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
                                                  oob = scales::squish,
-                                                 breaks = scales::pretty_breaks(n = 10),
-                                                 guide = guide_colorbar(barheight = unit(0.8, "npc"),
-                                                                        barwidth = unit(0.5, "cm"),
-                                                                        ticks.linewidth = 0.5)) +
+                                                 breaks = scales::pretty_breaks(n = 6)) +
     theme_bw() +
     scale_x_continuous(breaks = seq(1, max(combined_ratios$age, na.rm = TRUE))) +
     labs(x = 'Age class', 
          y = '', 
-         fill = '% change\nfrom\nbaseline') +
+         fill = '% change\nfrom\nbaseline\nWAA') +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           strip.text = element_text(size = 10))
@@ -2725,6 +2756,7 @@ plot_age_heatmap <- function(waa_df = NULL,
          dpi = 300)
   
   # Return the combined data for inspection if needed
+  return(p)
   invisible(combined_ratios)
 }
 
@@ -2831,7 +2863,7 @@ plot_diet_heatmap <- function(diet_df,
   }
   
   diet_ratios <- diet_ratios %>%
-    left_join(diet_baseline, by = c("Predator", "Cohort", "Name")) %>%
+    left_join(diet_baseline, by = c("Predator", "Age class", "LongName")) %>%
     mutate(ratio = comp_agg / comp_baseline,
            percent_change = ((comp_agg - comp_baseline) / comp_baseline) * 100)
   
@@ -2841,21 +2873,21 @@ plot_diet_heatmap <- function(diet_df,
     return(NULL)
   }
   
+  # order caps
+  diet_ratios$cap <- factor(diet_ratios$cap, levels = c("6e+05", "4e+05", "2e+05"))
+  
   # Create heatmap
   p <- diet_ratios %>%
     ggplot() +
-    geom_tile(aes(x = Cohort, y = Name, fill = percent_change), color = 'darkgrey') +
-    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
+    geom_tile(aes(x = `Age class`, y = LongName, fill = percent_change), color = 'darkgrey') +
+    colorspace::scale_fill_continuous_divergingx(palette = 'PRGn', mid = 0, rev = F,
                                                  oob = scales::squish,
-                                                 breaks = scales::pretty_breaks(n = 10),
-                                                 guide = guide_colorbar(barheight = unit(0.8, "npc"),
-                                                                        barwidth = unit(0.5, "cm"),
-                                                                        ticks.linewidth = 0.5)) + 
+                                                 breaks = scales::pretty_breaks(n = 6)) +
     theme_bw() +
-    scale_x_continuous(breaks = seq(0, max(diet_ratios$Cohort, na.rm = TRUE))) +
-    labs(x = 'Cohort', 
+    scale_x_continuous(breaks = seq(1, max(diet_ratios$`Age class`, na.rm = TRUE))) +
+    labs(x = 'Age class', 
          y = '', 
-         fill = '% change\nfrom\nbaseline') +
+         fill = '% change\nfrom\nbaseline\ngroundfish\nin diet') +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           strip.text = element_text(size = 10))
@@ -2875,5 +2907,6 @@ plot_diet_heatmap <- function(diet_df,
          dpi = 300)
   
   # Return the data for inspection
+  return(p)
   invisible(diet_ratios)
 }

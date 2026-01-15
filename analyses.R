@@ -228,7 +228,6 @@ catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","attainment-b
 
 plot_fishery(catch_df %>% filter(wgts != "binary"))
 
-
 # Plot OY rescaling only --------------------------------------------------
 
 resc_plot_sp <- c("POL", "COD","ATF")
@@ -251,7 +250,7 @@ resc_plot <- catch_df %>%
   scale_x_continuous(breaks = c(seq(1990,2100,10))) +
   scale_y_continuous(limits = c(0,NA)) +
   facet_grid(~ Name) +
-  labs(x = "Year", 
+  labs(x = "", 
        y = "",
        color = "Cap (mt)",
        linetype = "Weight scheme") +
@@ -437,21 +436,25 @@ plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core"
 
 # do it for top predators
 # For all runs with specific species
-preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surface_fish")
+preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surface_fish", "Dolphins")
 waa_pred <- map_df(run, ~calc_weight_at_age(.x, sp_names = preds, boundary_boxes = boundary_boxes))
 
 # plot
 plot_age_heatmap(waa_pred, plot_type = "WAA", by_env = T, tag = "pred")
-plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred")
+pw <- plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred")
 plot_age_heatmap(waa_pred, plot_type = "WAA", by_wgts = T, tag = "pred")
 
 # Top pred diets -----------------------------------------------------------------
 
 pred_diets <- bind_rows(lapply(run, get_dietcomp_preds))
-pred_diets <- pred_diets %>%
-  filter(is_oy > 0) %>%
-  left_join(grps %>% select(Code, Name), by = c("Predator"="Code")) %>%
-  left_join(key_config, by = "run")
 
-# All predators by capacity
-plot_diet_heatmap(pred_diets, by_cap = TRUE, tag = "test")
+# All predators by cap
+pd <- plot_diet_heatmap(pred_diets, by_cap = TRUE, tag = "test")
+
+# stack for figure
+p_pred <- pw / pd +
+  plot_layout(heights = c(1, 1)) +
+  plot_annotation(tag_levels = 'A')
+
+ggsave(paste0(plotdir, "/heatmaps/stacked_preds.png"), p_pred,
+       width = 10, height = 5.5, units = "in", dpi = 300)
