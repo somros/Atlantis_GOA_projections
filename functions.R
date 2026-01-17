@@ -986,7 +986,7 @@ get_polprop <- function(this_run){
 #' diet_comp <- get_dietcomp_preds("1043")
 #' }
 #'
-get_dietcomp_preds <- function(this_run){
+get_dietcomp_preds <- function(this_run, which_decade){
   
   print(this_run)
   
@@ -997,10 +997,10 @@ get_dietcomp_preds <- function(this_run){
   diet <- fread((dietfile))
   
   diet1 <- diet %>%
-    mutate(Time = ceiling(Time/365)) %>%
-    filter(Time > 100) %>% # keep the last 10 years only
+    mutate(decade = floor(Time/365/10)) %>%
+    filter(decade == which_decade) %>% # keep the last 10 years only
     select(-c(Stock, Updated)) %>%
-    pivot_longer(-c(Time, Predator, Cohort), names_to = "Prey", values_to = "comp") %>%
+    pivot_longer(-c(Time, Predator, Cohort,decade), names_to = "Prey", values_to = "comp") %>%
     filter(Predator %in% c("SSL", "PIN", "DOL", "BDF", "BSF")) %>%
     group_by(Predator, Cohort, Prey) %>% # average over last 10 years and across age classes for a predator
     summarise(comp = mean(comp), .groups = "drop") 
@@ -1193,11 +1193,15 @@ plot_ecosystem_indicators <- function(indicators_df){
   
   # filter out what we don't need for this paper
   indicators_df <- indicators_df %>%
-    filter(wgts != "binary", decade == 10, indicator != "roundfish_to_flatfish", env %in% c("NoClimate", "ssp585"))
+    filter(wgts != "binary", decade %in% c(6,10), indicator != "roundfish_to_flatfish", env %in% c("NoClimate", "ssp585"))
+  
+  # add decade label
+  indicators_df <- indicators_df %>%
+    mutate(decade_lab = ifelse(decade == 6, "2050-2059", "2090-2099"))
   
   # Time series plot with points and error bars
   p <- indicators_df %>%
-    ggplot(aes(x = env, y = value_mean, 
+    ggplot(aes(x = factor(decade_lab), y = value_mean, 
                color = factor(cap), 
                shape = factor(wgts))) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.5) +
@@ -1216,14 +1220,12 @@ plot_ecosystem_indicators <- function(indicators_df){
     #   legend.position = "bottom"
     # ) +
     labs(
-      x = "Climate scenario",
+      x = "",
       y = "Indicator value (mean ± SD)",
       color = "Cap (mt)",
       shape = "Weight scheme"
     ) +
-    facet_wrap(~ indicator, 
-               nrow = 1, 
-               scales = "free_y", 
+    facet_grid(env ~ indicator, 
                labeller = labeller(indicator = as_labeller(
                  c("forage_to_oy_spp" = "Forage fish / groundfish", 
                    "gadids_to_flatfish" = "Gadids / flatfish",
@@ -1231,7 +1233,7 @@ plot_ecosystem_indicators <- function(indicators_df){
                )))
   
   ggsave(paste0(plotdir, "/ecosystem_indicators.png"), p,
-         width = 10, height = 3,
+         width = 9, height = 4,
          units = "in", dpi = 300)
   
 }
@@ -2398,7 +2400,7 @@ calc_weight_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = N
     purrr::map(apply, MARGIN = 3, FUN = sum, na.rm = TRUE) %>% # mean total N by time (na.rm added)
     bind_cols() %>% # bind age groups elements together
     suppressMessages() %>% 
-    set_names(resN_vars) %>% 
+    set_names(resN_vars) %>% # TODO: change this, this is ResN + StrucN
     mutate(t = tyrs) %>%
     # pivot to long form
     pivot_longer(cols = -t, names_to = 'age_group', values_to = 'totN') %>%
@@ -2596,11 +2598,15 @@ plot_age_heatmap <- function(waa_df = NULL,
                              by_env = FALSE,
                              by_cap = FALSE,
                              by_wgts = FALSE,
-                             n_years = 5,
+                             which_decade = NULL,
                              tag = NULL) {
   
   # Validate inputs
   plot_type <- match.arg(plot_type)
+  
+  if(is.null(which_decade)){
+    stop("Please enter a decade as input")
+  }
   
   if(sum(by_env, by_cap, by_wgts) != 1) {
     stop("You need to plot either by env, cap, or wgts")
@@ -2629,18 +2635,13 @@ plot_age_heatmap <- function(waa_df = NULL,
   # Helper function to process data
   process_age_data <- function(df, value_col, metric_name) {
     
-    # Filter to integer years (Jan 1 values)
+    # Filter to desired decade
     df_filtered <- df %>%
-      mutate(year_int = floor(year)) %>%
-      filter(year == year_int)
+      mutate(decade = floor(year/10)) %>%
+      filter(decade == which_decade)
     
-    # Get the last n years
-    max_year <- max(df_filtered$year_int, na.rm = TRUE)
-    min_year <- max_year - n_years + 1
-    
-    # Filter to last n years and calculate means
+    # calculate means
     df_ny <- df_filtered %>%
-      filter(year_int >= min_year) %>%
       group_by(Name, LongName, age, env, cap, wgts) %>%
       summarise(value_mean = mean(.data[[value_col]], na.rm = TRUE), .groups = 'drop')
     
@@ -2723,7 +2724,7 @@ plot_age_heatmap <- function(waa_df = NULL,
     scale_x_continuous(breaks = seq(1, max(combined_ratios$age, na.rm = TRUE))) +
     labs(x = 'Age class', 
          y = '', 
-         fill = '% change\nfrom\nbaseline\nWAA') +
+         fill = '% change\nfrom\nbaseline') +
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           strip.text = element_text(size = 10))

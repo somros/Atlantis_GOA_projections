@@ -362,7 +362,7 @@ indicators_all <- map_df(run, ~{
 # Create plots
 plot_ecosystem_indicators(indicators_all)
 
-# Economic indicators -----------------------------------------------------
+# Revenue -----------------------------------------------------------------
 
 # Load price data
 price_dat <- read.csv("data/price.csv")
@@ -422,7 +422,7 @@ naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundar
 # Cap: 800K, unless you are comparing wgts scheme
 # Wgts: equal and 400K cap (no wgts at 800K) 
 
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core", which_decade = 10)
 plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core")
 plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core")
 
@@ -434,6 +434,14 @@ plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_env = T, tag = "core")
 plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_cap = T, tag = "core")
 plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core")
 
+# all grps for appendix
+waa_all <- map_df(run, ~calc_weight_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
+naa_all <- map_df(run, ~calc_numbers_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
+
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core")
+
 # do it for top predators
 # For all runs with specific species
 preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surface_fish", "Dolphins")
@@ -441,12 +449,12 @@ waa_pred <- map_df(run, ~calc_weight_at_age(.x, sp_names = preds, boundary_boxes
 
 # plot
 plot_age_heatmap(waa_pred, plot_type = "WAA", by_env = T, tag = "pred")
-pw <- plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred")
+pw <- plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred", which_decade = 5)
 plot_age_heatmap(waa_pred, plot_type = "WAA", by_wgts = T, tag = "pred")
 
 # Top pred diets -----------------------------------------------------------------
 
-pred_diets <- bind_rows(lapply(run, get_dietcomp_preds))
+pred_diets <- bind_rows(lapply(run, get_dietcomp_preds, which_decade = 5))
 
 # All predators by cap
 pd <- plot_diet_heatmap(pred_diets, by_cap = TRUE, tag = "test")
