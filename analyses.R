@@ -82,6 +82,8 @@ pref <- data.frame("Code" = oy_species) %>%
 
 ref_points_ss <- read.csv("output/ref_points_from_SS_runs_nov2025.csv")
 estbo_key <- ref_points_ss %>% select(Code, b0) %>% rename(estbo = b0)
+estbo_key <- estbo_key %>% mutate(b40 = 0.4*estbo,
+                                  b25 = 0.25*estbo)
 
 # need to get fref
 # the value in the prm is an input that may or may not be close
@@ -365,7 +367,7 @@ plot_ecosystem_indicators(indicators_all)
 # Revenue -----------------------------------------------------------------
 
 # Load price data
-price_dat <- read.csv("data/price.csv")
+price_dat <- read.csv("data/price_safe.csv")
 
 # For all runs
 all_runs <- key_config %>% pull(run)
@@ -466,3 +468,26 @@ p_pred <- pw / pd +
 
 ggsave(paste0(plotdir, "/heatmaps/stacked_preds.png"), p_pred,
        width = 10, height = 5.5, units = "in", dpi = 300)
+
+
+# Cap computations --------------------------------------------------------
+# what are equilibrium catches at b40? POL, SBF, COD, POP have converged by then
+catch_df %>%
+  filter(Time == 0, run == "000") %>%
+  select(Code, biom_mt_selex) %>%
+  arrange(-biom_mt_selex) %>%
+  mutate(cumsum = cumsum(biom_mt_selex),
+         prop = cumsum / sum(biom_mt_selex))
+
+# those stocks are less than half total biomass so I don't think this is helpful
+# we'd need HCRs on all, and to apply them we'd need to get FMSY etc.
+# should we even use FMSY for low attainment species, or historical F?
+# in that sense, we could just look at aggregate catch at the end of the run
+catch_df %>%
+  filter(Time == max(Time), run == "000") %>%
+  pull(catch_mt) %>%
+  sum()
+
+# 363563 mt. This is in the neighborhood of Mueter and Megrey
+# This is saying here is the catch the system equilibrates to if HCR stocks get harvested at Ftarget, and other stock keep being exploited at current levels
+#

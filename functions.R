@@ -327,10 +327,12 @@ plot_fishery <- function(catch_df){
               biom_tot = sum(biom_mt_selex)) %>%
     ungroup() %>%
     pivot_longer(-c(Time:env)) %>%
+    # filter(env %in% c("NoClimate", "ssp585"), wgts == "equal") %>% # added for AMSS
+    filter(env %in% c("NoClimate"), wgts != "binary", name == "catch_tot") %>% # added for AMSS
     ggplot(aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts)))+
     # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
     #          fill = "grey", alpha = 0.3) +
-    geom_line(linewidth = 0.5)+
+    geom_line(linewidth = 1, alpha = 0.8)+ # tweaked for AMSS
     scale_color_manual(values = cap_col)+
     #scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     scale_linetype_manual(values = c("solid","dashed","dotted"))+
@@ -340,13 +342,17 @@ plot_fishery <- function(catch_df){
                linewidth = 0.25)+    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     theme_bw()+
     # scale_x_continuous(breaks = c(seq(1990,2100,10)))+
-    scale_x_continuous(breaks = c(seq(2020,2100,10)))+
+    # scale_x_continuous(breaks = c(seq(2020,2100,10)))+
+    scale_x_continuous(limit = c(2020,2050), breaks = c(seq(2020,2100,10)))+ # AMSS
     scale_y_continuous(limits = c(0,NA))+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    # theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom")+
     labs(x = "", 
          y = "Metric tons",
          color = "Cap (mt)",
          linetype = "Weight scheme")+
+    guides(linetype = "none")+ # AMSS
     facet_grid(name~env, scales = "free_y",
                labeller = labeller(name = as_labeller(
                  c("biom_tot" = "SSB", 
@@ -354,7 +360,7 @@ plot_fishery <- function(catch_df){
                )))
   
   ggsave(paste0(plotdir, "/", "oy_tot.png"), p1, 
-         width = 10, height = 4.5,  
+         width = 5.5, height = 4.5,  
          units = "in", dpi = 300)
   
   # by species, biom fraction (need B0), f fraction, catch, biomass (selected), exploitation rate, ...?
@@ -375,28 +381,30 @@ plot_fishery <- function(catch_df){
       pivot_longer(-c(Time, Code, Name, run, cap, wgts, env))
     
     # drop the f_frac panel, redundant with the OY rescale panel mostly and we have the HCR information in the dedicated plots
-    p_df <- p_df %>% filter(name != "f_frac")
+    p_df <- p_df %>% filter(name != "f_frac")# %>%
+      # filter(env %in% c("NoClimate"), wgts != "binary", name != "oy_rescale") # added for AMSS
+      # filter(env %in% c("NoClimate", "ssp585"), wgts != "binary", name != "oy_rescale") # added for AMSS
     
     p_tmp <- ggplot(data = p_df %>% filter(Time > burnin*365+1), 
                     aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts))) +
       # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
       #          fill = "grey", alpha = 0.3) +
-      geom_line(linewidth = 0.5) +
+      geom_line(linewidth = 1, alpha = 0.8) +
       scale_color_manual(values = cap_col)+
       scale_linetype_manual(values = c("solid","dashed","dotted"))+
       # scale_x_continuous(breaks = c(seq(1990,2100,10))) +
       scale_x_continuous(breaks = c(seq(2020,2100,10))) +
       scale_y_continuous(limits = c(0,NA)) +
       geom_hline(data = data.frame(name = "biom_frac", 
-                                   env = unique(catch_df$env)),
+                                   env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
                  aes(yintercept = 1), linetype = "dotted") +
       {if(oy_species[i] %in% hcr_spp) 
         geom_hline(data = data.frame(name = "biom_frac", 
-                                     env = unique(catch_df$env)),
+                                     env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
                    aes(yintercept = 0.4), linetype = "dotted", color = "blue")} + 
       {if(oy_species[i] %in% hcr_spp) 
         geom_hline(data = data.frame(name = "biom_frac", 
-                                     env = unique(catch_df$env)),
+                                     env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
                    aes(yintercept = 0.2), linetype = "dotted", color = "red")} + 
       # geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
       facet_grid2(env ~ name, scales = "free_y", independent = "y") +
@@ -408,8 +416,8 @@ plot_fishery <- function(catch_df){
       theme_bw() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
-    ggsave(paste0(plotdir, "/by_spp/", current_code, ".png"), p_tmp, 
-           width = 10, height = 4.5,  
+    ggsave(paste0(plotdir, "/by_spp/", current_code, "1.png"), p_tmp, 
+           width = 7.5, height = 3,  
            units = "in", dpi = 300)
     
   }
@@ -559,13 +567,13 @@ plot_fishery <- function(catch_df){
     filter(Time >= burnin*365, !is.na(f_ratio)) %>%
     mutate(decade = floor(Time/365/10)) %>%
     # filter(decade %in% c(3, 10)) %>%
-    filter(decade == 10, wgts != "binary") %>%
+    filter(decade == 5, wgts != "binary") %>%
     group_by(decade, run, cap, wgts, env) %>%
     summarise(across(c(biom_pol, f_pol, biom_atf, f_atf, f_ratio),
                      list(mean = mean, sd = sd),
                      .names = "{.col}_{.fn}"),
               .groups = 'drop') %>%
-    filter(cap == "2e+05") %>% # because it is the only cap where catch streams from different wgts schemes still diverge at the end (other caps have become unconstraining)
+    filter(cap %in% c("2e+05", "4e+05")) %>% # because it is the only cap where catch streams from different wgts schemes still diverge at the end (other caps have become unconstraining)
     ggplot(aes(x = biom_atf_mean, y = biom_pol_mean, color = f_atf_mean, shape = factor(wgts)))+
     geom_errorbar(aes(ymin = biom_pol_mean - biom_pol_sd, 
                       ymax = biom_pol_mean + biom_pol_sd), 
@@ -573,8 +581,9 @@ plot_fishery <- function(catch_df){
     geom_errorbarh(aes(xmin = biom_atf_mean - biom_atf_sd, 
                        xmax = biom_atf_mean + biom_atf_sd), 
                    height = 0, alpha = 0.9) +
-    geom_line(aes(group = interaction(decade, cap))) +
-    geom_point(aes(shape = factor(wgts)), size = 1.5)+
+    # geom_line(aes(group = interaction(decade, cap))) +
+    geom_point(aes(shape = factor(wgts)), size = 2)+
+    scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) +
     scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     viridis::scale_color_viridis(option = "cividis", begin = 0.2, end = 0.8)+
     theme_bw()+
@@ -583,15 +592,15 @@ plot_fishery <- function(catch_df){
          shape = "Weight scheme",
          color = "F(atf)",
          title = "Pollock-arrowtooth tradeoffs")+
-    facet_grid(~ env)#, 
+    facet_grid(cap ~ env)#, 
                # labeller = labeller(decade = as_labeller(
                #   c("3" = "2020-2029", 
                #     "10" = "2090-2099")
                # )))
 
   
-  ggsave(paste0(plotdir, "/pol_vs_atf.png"), p4, 
-         width = 10, height = 3, 
+  ggsave(paste0(plotdir, "/pol_vs_atf1.png"), p4, 
+         width = 10, height = 4, 
          units = "in", dpi = 300)
   
   # plot quantities relative to reference points and ecosystem indicators
@@ -702,11 +711,16 @@ plot_catch_delta <- function(catch_df){
       catch_baseline = catch_tot,
       biom_baseline = biom_tot
     ) %>%
-    select(Time, wgts, env, catch_baseline, biom_baseline)
+    select(Time, env, catch_baseline, biom_baseline)
+  
+  # expand to other wgts
+  all_wgts <- unique(totals$wgts)
+  baseline <- baseline %>%
+    crossing(wgts = all_wgts)
   
   # Calculate difference from baseline
   delta <- totals %>%
-    filter(cap != 8e+05, wgts == "equal") %>%
+    filter(cap != 8e+05, wgts != "binary") %>%
     left_join(baseline, by = c("Time", "wgts", "env")) %>%
     mutate(
       catch_delta = catch_tot - catch_baseline,
@@ -729,10 +743,13 @@ plot_catch_delta <- function(catch_df){
   
   # Create plot
   p <- delta %>%
+    filter(wgts != "binary") %>%
+    filter(env == "NoClimate") %>%
+    filter(cap == "6e+05") %>%
     filter(Time > burnin * 365) %>%
-    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(cap))) +
-    geom_bar(stat = "identity", position = position_dodge()) +
-    scale_fill_manual(values = cap_col) +
+    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(wgts))) +
+    geom_bar(stat = "identity", position = position_dodge(0.9)) +
+    #scale_fill_manual(values = cap_col) +
     scale_x_continuous(breaks = seq(1990, 2100, 10)) +
     geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.5) +
     theme_bw() +
@@ -748,6 +765,67 @@ plot_catch_delta <- function(catch_df){
   ggsave(paste0(plotdir, "/catch_biom_cap_impact.png"), p, 
          width = 12, height = 6,  
          units = "in", dpi = 300)
+  
+}
+
+plot_revenue_delta <- function(revenue_df){
+  
+  # Process revenue data by time and scenario
+  revenue_totals <- revenue_df %>%
+    filter(Time > 0) %>%
+    select(Time, run, cap, wgts, env, revenue)
+  
+  # Get no-cap baseline (800,000 mt cap)
+  baseline <- revenue_totals %>%
+    filter(cap == 8e+05) %>%
+    rename(revenue_baseline = revenue) %>%
+    select(Time, env, revenue_baseline)
+  
+  # Expand to other wgts
+  all_wgts <- unique(revenue_totals$wgts)
+  baseline <- baseline %>%
+    crossing(wgts = all_wgts)
+  
+  # Calculate difference from baseline
+  delta <- revenue_totals %>%
+    filter(cap != 8e+05, wgts != "binary") %>%
+    left_join(baseline, by = c("Time", "wgts", "env")) %>%
+    mutate(revenue_delta = revenue - revenue_baseline) %>%
+    select(Time, run, cap, wgts, env, revenue_delta)
+  
+  # Make palette for capped scenarios only (excluding 8e+05)
+  cap_col <- pnw_palette(name="Sunset2", 
+                         n=length(unique(delta$cap)), 
+                         type="discrete")
+  
+  delta$wgts <- factor(delta$wgts, levels = c("equal","attainment-based","binary"))
+  
+  # Create plot
+  p <- delta %>%
+    filter(wgts != "binary") %>%
+    filter(env == "NoClimate") %>%
+    filter(cap == "6e+05") %>%
+    filter(Time > burnin * 365) %>%
+    ggplot(aes(x = (Time/365) + 1990, y = revenue_delta, fill = factor(wgts))) +
+    geom_bar(stat = "identity", position = position_dodge(0.9)) +
+    scale_x_continuous(limits = c(2020, 2050), breaks = seq(1990, 2100, 10)) +
+    scale_y_continuous(labels = scales::dollar_format()) +
+    geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.5) +
+    theme_bw() +
+    # theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(
+      x = "",
+      y = "Difference from 800K mt cap ($)",
+      fill = "Weight scheme",
+      title = "Impact of 600K mt cap on revenue (relative to 800K mt cap)"
+    ) +
+    facet_wrap(~ env)
+  
+  ggsave(paste0(plotdir, "/revenue_cap_impact.png"), p, 
+         width = 8, height = 3.5,  
+         units = "in", dpi = 300)
+  
+  # summary of foregone revenues
   
 }
 
@@ -1642,9 +1720,13 @@ plot_delta <- function(catch_df, revenue_df){
   catch_df <- catch_df %>% filter(env == "NoClimate")
   revenue_df <- revenue_df %>% filter(env == "NoClimate")
   
+  # for AMSS
+  # catch_df <- catch_df %>% filter(wgts == "equal")
+  # revenue_df <- revenue_df %>% filter(wgts == "equal")
+  
   # Ensure cap is numeric in both dataframes for joining
   catch_df <- catch_df %>% mutate(cap = as.numeric(as.character(cap)))
-  revenue_df <- revenue_df %>% mutate(cap = as.numeric(cap))
+  revenue_df <- revenue_df %>% mutate(cap = as.numeric(as.character(cap)))
   
   # Calculate total catch and biomass by time and scenario
   totals <- catch_df %>%
@@ -1884,6 +1966,7 @@ plot_ecosystem_delta <- function(catch_df){
   forage <- c("CAP", "EUL", "SAN", "FOS", "HER")
   predators <- c("SSL", "PIN", "BDF", "BSF")
   halibut <- "HAL"
+  salmon <- c("SCH","SCM","SSO","SCO","SPI")
   
   # Get all runs
   all_runs <- unique(catch_df$run)
@@ -1939,10 +2022,17 @@ plot_ecosystem_delta <- function(catch_df){
       group_by(Time) %>%
       summarise(hal_biom = sum(mt, na.rm = TRUE), .groups = 'drop')
     
+    # calculate salmon total biomass
+    sal_biom <- biom_long %>%
+      filter(Code %in% salmon) %>%
+      group_by(Time) %>%
+      summarise(sal_biom = sum(mt, na.rm = TRUE), .groups = 'drop')
+    
     # Combine all metrics
     ecosystem_biom <- forage_biom %>%
       left_join(predator_biom, by = "Time") %>%
       left_join(hal_biom, by = "Time") %>%
+      left_join(sal_biom, by = "Time") %>%
       mutate(run = this_run)
     
     return(ecosystem_biom)
@@ -1965,9 +2055,10 @@ plot_ecosystem_delta <- function(catch_df){
     rename(
       forage_baseline = forage_biom,
       predator_baseline = predator_biom,
-      hal_baseline = hal_biom
+      hal_baseline = hal_biom,
+      sal_baseline = sal_biom
     ) %>%
-    select(Time, env, forage_baseline, predator_baseline, hal_baseline)
+    select(Time, env, forage_baseline, predator_baseline, hal_baseline, sal_baseline)
   
   # Expand baseline to all wgts levels
   all_wgts <- unique(ecosystem_all$wgts)
@@ -1981,7 +2072,8 @@ plot_ecosystem_delta <- function(catch_df){
     mutate(
       forage_delta = forage_biom - forage_baseline,
       predator_delta = predator_biom - predator_baseline,
-      hal_delta = hal_biom - hal_baseline
+      hal_delta = hal_biom - hal_baseline,
+      sal_delta = sal_biom - sal_baseline
     )
   
   # Calculate catch deltas
@@ -2005,7 +2097,7 @@ plot_ecosystem_delta <- function(catch_df){
   # Join catch and ecosystem deltas
   delta_all <- delta_catch %>%
     left_join(delta_ecosystem %>% select(Time, run, cap, wgts, env, 
-                                         forage_delta, predator_delta, hal_delta),
+                                         forage_delta, predator_delta, hal_delta, sal_delta),
               by = c("Time", "run", "cap", "wgts", "env"))
   
   # Filter to post-burnin and exclude binary
@@ -2028,16 +2120,17 @@ plot_ecosystem_delta <- function(catch_df){
   
   # Prepare ecosystem metrics for plotting
   delta_ecosystem_long <- delta_filtered %>%
-    select(Time, decade, run, cap, wgts, env, forage_delta, predator_delta, hal_delta) %>%
+    select(Time, decade, run, cap, wgts, env, forage_delta, predator_delta, hal_delta, sal_delta) %>%
     pivot_longer(
-      cols = c(forage_delta, predator_delta, hal_delta),
+      cols = c(forage_delta, predator_delta, hal_delta, sal_delta),
       names_to = "variable",
       values_to = "delta"
     ) %>%
     mutate(variable = recode(variable,
                              "forage_delta" = "Forage fish",
                              "predator_delta" = "Top predators",
-                             "hal_delta" = "Halibut"))
+                             "hal_delta" = "Halibut",
+                             "sal_delta" = "Salmon"))
   
   # Aggregate to decadal averages for ecosystem metrics
   ecosystem_decadal <- delta_ecosystem_long %>%
@@ -2108,17 +2201,17 @@ plot_ecosystem_delta <- function(catch_df){
       y = "Biomass difference (mt)",
       fill = "Cap (mt)"
     ) +
-    facet_wrap(~variable, nrow = 3, scales = "free_y")
+    facet_wrap(~variable, nrow = 4, scales = "free_y")
   
   # Stack plots using patchwork
   library(patchwork)
   p_combined <- p_catch / p_ecosystem +
-    plot_layout(heights = c(1, 3), guides = "collect") +
+    plot_layout(heights = c(1, 4), guides = "collect") +
     plot_annotation(tag_levels = 'A') &
     theme(legend.position = "bottom")
   
   ggsave(paste0(plotdir, "/catch_ecosystem_delta.png"), p_combined,
-         width = 5, height = 8, units = "in", dpi = 300)
+         width = 5, height = 10, units = "in", dpi = 300)
   
   # Create summary table
   summary_table <- delta_filtered %>%
@@ -2128,6 +2221,7 @@ plot_ecosystem_delta <- function(catch_df){
       total_forage_gain = sum(forage_delta),
       total_predator_gain = sum(predator_delta),
       total_hal_gain = sum(hal_delta),
+      total_sal_gain = sum(sal_delta),
       .groups = 'drop'
     ) %>%
     arrange(wgts, cap)
