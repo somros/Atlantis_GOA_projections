@@ -440,9 +440,9 @@ plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core"
 waa_all <- map_df(run, ~calc_weight_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
 naa_all <- map_df(run, ~calc_numbers_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
 
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core")
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core")
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core")
+plot_age_heatmap(waa_all, naa_all %>% filter(Name != "Cod"), plot_type = "both", by_env = T, tag = "all_nocod", which_decade = 10)
+plot_age_heatmap(waa_all, naa_all, plot_type = "both", by_cap = T, tag = "all", which_decade = 5)
+plot_age_heatmap(waa_all, naa_all, plot_type = "both", by_wgts = T, tag = "all", which_decade = 10)
 
 # do it for top predators
 # For all runs with specific species
@@ -490,4 +490,4 @@ catch_df %>%
 
 # 363563 mt. This is in the neighborhood of Mueter and Megrey
 # This is saying here is the catch the system equilibrates to if HCR stocks get harvested at Ftarget, and other stock keep being exploited at current levels
-#
+# save this

@@ -2686,6 +2686,176 @@ calc_numbers_at_age <- function(this_run, sp_names = oy_names, boundary_boxes = 
 #' }
 #'
 #' @export
+# plot_age_heatmap <- function(waa_df = NULL, 
+#                              naa_df = NULL,
+#                              plot_type = c("both", "WAA", "NAA"),
+#                              by_env = FALSE,
+#                              by_cap = FALSE,
+#                              by_wgts = FALSE,
+#                              which_decade = NULL,
+#                              tag = NULL) {
+#   
+#   # Validate inputs
+#   plot_type <- match.arg(plot_type)
+#   
+#   if(is.null(which_decade)){
+#     stop("Please enter a decade as input")
+#   }
+#   
+#   if(sum(by_env, by_cap, by_wgts) != 1) {
+#     stop("You need to plot either by env, cap, or wgts")
+#   }
+#   
+#   if(plot_type %in% c("WAA", "both") && is.null(waa_df)) {
+#     stop("waa_df is required when plot_type is 'WAA' or 'both'")
+#   }
+#   
+#   if(plot_type %in% c("NAA", "both") && is.null(naa_df)) {
+#     stop("naa_df is required when plot_type is 'NAA' or 'both'")
+#   }
+#   
+#   # Determine label for faceting and filename
+#   if(by_env) {
+#     lab <- "env"
+#     facet_var <- "env"
+#   } else if(by_cap) {
+#     lab <- "cap"
+#     facet_var <- "cap"
+#   } else {
+#     lab <- "wgts"
+#     facet_var <- "wgts"
+#   }
+#   
+#   # Helper function to process data
+#   process_age_data <- function(df, value_col, metric_name) {
+#     
+#     # Filter to desired decade
+#     df_filtered <- df %>%
+#       mutate(decade = floor(year/10)) %>%
+#       filter(decade == which_decade)
+#     
+#     # calculate means
+#     df_ny <- df_filtered %>%
+#       group_by(Name, LongName, age, env, cap, wgts) %>%
+#       summarise(value_mean = mean(.data[[value_col]], na.rm = TRUE), .groups = 'drop')
+#     
+#     # Create baseline
+#     df_baseline <- df_ny %>% 
+#       filter(env == "NoClimate", wgts == "equal") %>%
+#       rename(value_baseline = value_mean)
+#     
+#     if(by_wgts) {
+#       df_baseline <- df_baseline %>% filter(cap == 4e+05)
+#     } else {
+#       df_baseline <- df_baseline %>% filter(cap == 8e+05)
+#     }
+#     
+#     df_baseline <- df_baseline %>%
+#       select(-c(env, cap, wgts))
+#     
+#     # Calculate ratios based on comparison type
+#     if(by_env) {
+#       df_ratios <- df_ny %>%
+#         filter(env != "NoClimate", cap == 8e+05, wgts == "equal")
+#     } else if(by_cap) {
+#       df_ratios <- df_ny %>%
+#         filter(env == "NoClimate", cap != 8e+05, wgts == "equal")
+#     } else {
+#       df_ratios <- df_ny %>%
+#         filter(env == "NoClimate", cap == 4e+05, wgts != "equal")
+#     }
+#     
+#     df_ratios <- df_ratios %>%
+#       left_join(df_baseline, by = c("Name", "LongName", "age")) %>%
+#       mutate(ratio = value_mean / value_baseline,
+#              percent_change = ((value_mean - value_baseline) / value_baseline) * 100,
+#              metric = metric_name)
+#     
+#     return(df_ratios)
+#   }
+#   
+#   # Process data and combine
+#   ratio_list <- list()
+#   
+#   if(plot_type %in% c("WAA", "both")) {
+#     waa_ratios <- process_age_data(waa_df, "weight", "Weight-at-Age")
+#     if(nrow(waa_ratios) > 0) {
+#       ratio_list$waa <- waa_ratios
+#     } else {
+#       message("No WAA data to plot after filtering")
+#     }
+#   }
+#   
+#   if(plot_type %in% c("NAA", "both")) {
+#     naa_ratios <- process_age_data(naa_df, "abun", "Numbers-at-Age")
+#     if(nrow(naa_ratios) > 0) {
+#       ratio_list$naa <- naa_ratios
+#     } else {
+#       message("No NAA data to plot after filtering")
+#     }
+#   }
+#   
+#   # Check if we have any data to plot
+#   if(length(ratio_list) == 0) {
+#     message("No data to plot after filtering")
+#     return(NULL)
+#   }
+#   
+#   # Combine the data frames
+#   combined_ratios <- bind_rows(ratio_list)
+#   
+#   # order caps
+#   combined_ratios$cap <- factor(combined_ratios$cap, levels = c("6e+05", "4e+05", "2e+05"))
+#   
+#   # Create the plot
+#   p <- combined_ratios %>%
+#     ggplot() +
+#     geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+#     colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
+#                                                  oob = scales::squish,
+#                                                  breaks = scales::pretty_breaks(n = 6)) +
+#     theme_bw() +
+#     scale_x_continuous(breaks = seq(1, max(combined_ratios$age, na.rm = TRUE))) +
+#     labs(x = 'Age class', 
+#          y = '', 
+#          fill = '% change\nfrom\nbaseline') +
+#     theme(panel.grid.major = element_blank(), 
+#           panel.grid.minor = element_blank(),
+#           strip.text = element_text(size = 10))
+#   
+#   # Add faceting based on whether we're plotting one or both metrics
+#   if(plot_type == "both" && length(ratio_list) == 2) {
+#     # Facet by metric (rows) and comparison variable (columns)
+#     p <- p + facet_grid(reformulate(facet_var, "metric"))
+#     plot_height <- 4
+#     filename <- paste0(plotdir, "/heatmaps/age_heatmap_", lab, "_", tag, ".png")
+#   } else {
+#     # Facet only by comparison variable
+#     p <- p + facet_grid(reformulate(facet_var, "."))
+#     plot_height <- 3
+#     
+#     # Determine filename based on which metric we actually plotted
+#     if(!is.null(ratio_list$waa)) {
+#       filename <- paste0(plotdir, "/heatmaps/waa_heatmap_", lab, "_", tag, ".png")
+#     } else {
+#       filename <- paste0(plotdir, "/heatmaps/naa_heatmap_", lab, "_", tag, ".png")
+#     }
+#   }
+#   
+#   # Save the plot
+#   ggsave(filename, 
+#          p, 
+#          width = 10, 
+#          height = plot_height, 
+#          units = "in", 
+#          dpi = 300)
+#   
+#   # Return the combined data for inspection if needed
+#   return(p)
+#   invisible(combined_ratios)
+# }
+
+# alt version
 plot_age_heatmap <- function(waa_df = NULL, 
                              naa_df = NULL,
                              plot_type = c("both", "WAA", "NAA"),
@@ -2693,7 +2863,8 @@ plot_age_heatmap <- function(waa_df = NULL,
                              by_cap = FALSE,
                              by_wgts = FALSE,
                              which_decade = NULL,
-                             tag = NULL) {
+                             tag = NULL,
+                             shared_scale = FALSE) {
   
   # Validate inputs
   plot_type <- match.arg(plot_type)
@@ -2729,17 +2900,14 @@ plot_age_heatmap <- function(waa_df = NULL,
   # Helper function to process data
   process_age_data <- function(df, value_col, metric_name) {
     
-    # Filter to desired decade
     df_filtered <- df %>%
       mutate(decade = floor(year/10)) %>%
       filter(decade == which_decade)
     
-    # calculate means
     df_ny <- df_filtered %>%
       group_by(Name, LongName, age, env, cap, wgts) %>%
       summarise(value_mean = mean(.data[[value_col]], na.rm = TRUE), .groups = 'drop')
     
-    # Create baseline
     df_baseline <- df_ny %>% 
       filter(env == "NoClimate", wgts == "equal") %>%
       rename(value_baseline = value_mean)
@@ -2753,7 +2921,6 @@ plot_age_heatmap <- function(waa_df = NULL,
     df_baseline <- df_baseline %>%
       select(-c(env, cap, wgts))
     
-    # Calculate ratios based on comparison type
     if(by_env) {
       df_ratios <- df_ny %>%
         filter(env != "NoClimate", cap == 8e+05, wgts == "equal")
@@ -2774,85 +2941,102 @@ plot_age_heatmap <- function(waa_df = NULL,
     return(df_ratios)
   }
   
-  # Process data and combine
+  # Helper to build a single heatmap panel
+  build_heatmap <- function(df, fill_limits = NULL) {
+    
+    df$cap <- factor(df$cap, levels = c("6e+05", "4e+05", "2e+05"))
+    
+    metric_label <- unique(df$metric)
+    
+    p <- df %>%
+      ggplot() +
+      geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
+      colorspace::scale_fill_continuous_divergingx(
+        palette = 'RdBu', mid = 0, rev = TRUE,
+        oob = scales::squish,
+        limits = fill_limits,
+        breaks = scales::pretty_breaks(n = 6)
+      ) +
+      theme_bw() +
+      scale_x_continuous(breaks = seq(1, max(df$age, na.rm = TRUE))) +
+      facet_grid(reformulate(facet_var, ".")) +
+      labs(x = 'Age class',
+           y = '',
+           fill = paste0('% change\nfrom\nbaseline\n(', metric_label, ')')) +
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            strip.text = element_text(size = 10))
+    
+    return(p)
+  }
+  
+  # Process data
   ratio_list <- list()
   
   if(plot_type %in% c("WAA", "both")) {
-    waa_ratios <- process_age_data(waa_df, "weight", "Weight-at-Age")
-    if(nrow(waa_ratios) > 0) {
-      ratio_list$waa <- waa_ratios
-    } else {
-      message("No WAA data to plot after filtering")
-    }
+    waa_ratios <- process_age_data(waa_df, "weight", "WAA")
+    if(nrow(waa_ratios) > 0) ratio_list$waa <- waa_ratios else message("No WAA data to plot after filtering")
   }
   
   if(plot_type %in% c("NAA", "both")) {
-    naa_ratios <- process_age_data(naa_df, "abun", "Numbers-at-Age")
-    if(nrow(naa_ratios) > 0) {
-      ratio_list$naa <- naa_ratios
-    } else {
-      message("No NAA data to plot after filtering")
-    }
+    naa_ratios <- process_age_data(naa_df, "abun", "NAA")
+    if(nrow(naa_ratios) > 0) ratio_list$naa <- naa_ratios else message("No NAA data to plot after filtering")
   }
   
-  # Check if we have any data to plot
   if(length(ratio_list) == 0) {
     message("No data to plot after filtering")
     return(NULL)
   }
   
-  # Combine the data frames
-  combined_ratios <- bind_rows(ratio_list)
-  
-  # order caps
-  combined_ratios$cap <- factor(combined_ratios$cap, levels = c("6e+05", "4e+05", "2e+05"))
-  
-  # Create the plot
-  p <- combined_ratios %>%
-    ggplot() +
-    geom_tile(aes(x = age, y = LongName, fill = percent_change), color = 'darkgrey') +
-    colorspace::scale_fill_continuous_divergingx(palette = 'RdBu', mid = 0, rev = TRUE,
-                                                 oob = scales::squish,
-                                                 breaks = scales::pretty_breaks(n = 6)) +
-    theme_bw() +
-    scale_x_continuous(breaks = seq(1, max(combined_ratios$age, na.rm = TRUE))) +
-    labs(x = 'Age class', 
-         y = '', 
-         fill = '% change\nfrom\nbaseline') +
-    theme(panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          strip.text = element_text(size = 10))
-  
-  # Add faceting based on whether we're plotting one or both metrics
-  if(plot_type == "both" && length(ratio_list) == 2) {
-    # Facet by metric (rows) and comparison variable (columns)
-    p <- p + facet_grid(reformulate(facet_var, "metric"))
-    plot_height <- 4
-    filename <- paste0(plotdir, "/heatmaps/age_heatmap_", lab, "_", tag, ".png")
-  } else {
-    # Facet only by comparison variable
-    p <- p + facet_grid(reformulate(facet_var, "."))
-    plot_height <- 3
+  # --- Single-metric case: same as before ---
+  if(plot_type != "both" || length(ratio_list) == 1) {
     
-    # Determine filename based on which metric we actually plotted
+    combined <- bind_rows(ratio_list)
+    p <- build_heatmap(combined)
+    
     if(!is.null(ratio_list$waa)) {
       filename <- paste0(plotdir, "/heatmaps/waa_heatmap_", lab, "_", tag, ".png")
     } else {
       filename <- paste0(plotdir, "/heatmaps/naa_heatmap_", lab, "_", tag, ".png")
     }
+    
+    ggsave(filename, p, width = 10, height = 3, units = "in", dpi = 300)
+    return(p)
   }
   
-  # Save the plot
-  ggsave(filename, 
-         p, 
-         width = 10, 
-         height = plot_height, 
-         units = "in", 
+  # --- Both metrics: build two plots and stack ---
+  
+  if(shared_scale) {
+    # Compute a symmetric shared limit across both datasets
+    all_pct <- c(ratio_list$waa$percent_change, ratio_list$naa$percent_change)
+    abs_max <- max(abs(all_pct), na.rm = TRUE)
+    fill_limits <- c(-abs_max, abs_max)
+  } else {
+    fill_limits <- NULL   # each plot scales independently
+  }
+  
+  p_waa <- build_heatmap(ratio_list$waa, fill_limits = fill_limits)
+  p_naa <- build_heatmap(ratio_list$naa, fill_limits = fill_limits)
+  
+  # Remove x-axis label from top panel to reduce redundancy
+  p_waa <- p_waa + labs(x = NULL) +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  
+  # Stack with patchwork
+  p_combined <- p_waa / p_naa +
+    patchwork::plot_layout(heights = c(1, 1))
+  
+  filename <- paste0(plotdir, "/heatmaps/age_heatmap_", lab, "_", tag, ".png")
+  
+  ggsave(filename,
+         p_combined,
+         width = 10,
+         height = 6,
+         units = "in",
          dpi = 300)
   
-  # Return the combined data for inspection if needed
-  return(p)
-  invisible(combined_ratios)
+  return(p_combined)
+  invisible(list(waa = ratio_list$waa, naa = ratio_list$naa))
 }
 
 #' Create a heatmap of predator diet composition changes relative to baseline
