@@ -491,3 +491,84 @@ catch_df %>%
 # 363563 mt. This is in the neighborhood of Mueter and Megrey
 # This is saying here is the catch the system equilibrates to if HCR stocks get harvested at Ftarget, and other stock keep being exploited at current levels
 # save this
+
+# Tcorr tracker -----------------------------------------------------------
+# To corroborate the effects of Tcorr on WAA for groundfish, make plots that show where along the curve we are
+# ingredients: 
+# 1. mean output temperature from the NC files over the time series. maybe summer temp only
+# 2. Unimodal response parameters for all fish groups
+tcorr_dat <- read.csv("data/tcorr_pars.csv", header = TRUE)
+
+# subset to groundfish as that's what we are showing
+tcorr_dat <- tcorr_dat %>%
+  left_join(grps %>% select(Code, LongName), by = c("Species"="LongName")) %>%
+  filter(Code %in% oy_species) %>%
+  select(-Code)
+
+# Build curves across a Tamb range for every species
+Tamb_seq <- seq(5, 12, by = 0.1)
+
+curves_df <- tcorr_dat %>%
+  expand_grid(Tamb = Tamb_seq) %>%                        # expand here
+  mutate(                                                  # fully vectorised, no rowwise
+    Y     = log(q10) * (Tmax - Topt + 2),
+    Z     = log(q10) * (Tmax - Topt),
+    X     = (Z^2 * (1 + (1 + 40/Y)^0.5)^2) / 400,
+    V     = (Tmax - Tamb) / (Tmax - Topt),
+    Tcorr = V^X * exp(X * (1 - V))
+  ) %>%
+  select(Species, Tamb, Tcorr)
+
+# extract temperature from the output
+# Apply across all runs
+# READ box_areas.csv. We need box areas to weigh temperatures by box areas in getting model-wide averages
+# as we have trouble installing rbgm on this server, I am importing this as CSV that I produced locally. areas are derived from the BGM file
+# the data file will be in the repo so it can be reran
+box_areas <- read.csv("data/box_areas.csv")
+temp_all <- map_df(run, ~calc_mean_temperature(.x, boundary_boxes = boundary_boxes, layer = 7)) # layer 7 is the sediment, which has the same temp as the botttom water layer
+
+temp_df <- temp_all %>% 
+  filter(cap == 800000, wgts == "equal", env != "NoClimate") %>%  # subset to the status quo cap
+  mutate(year = floor(t) + 1990) %>%
+  select(-run, -cap, -wgts) %>%
+  filter(year < 2100, year > 2019) %>% # drop last time step as that's winter of the last year 
+  group_by(year, env) %>%
+  summarise(mean_temp = mean(mean_temp)) # get mean temperature for each year, understanding that there is seasonal variation
+
+# temp_df %>%
+#   ggplot(aes(x = year, y = mean_temp, color = env))+
+#   geom_line()
+
+# Compute Tcorr at actual model temperatures for every species × env × year
+model_tcorr <- temp_df %>%
+  cross_join(tcorr_dat) %>%
+  mutate(
+    Y     = log(q10) * (Tmax - Topt + 2),
+    Z     = log(q10) * (Tmax - Topt),
+    X     = (Z^2 * (1 + (1 + 40/Y)^0.5)^2) / 400,
+    V     = (Tmax - mean_temp) / (Tmax - Topt),
+    Tcorr = V^X * exp(X * (1 - V))
+  )
+
+# Plot
+p_tcorr <- ggplot() +
+  geom_line(
+    data = curves_df,
+    aes(x = Tamb, y = Tcorr, group = Species),
+    color = "grey75", linewidth = 1, alpha = 0.8
+  ) +
+  geom_point(
+    data = model_tcorr %>% filter(env == "ssp585"),
+    aes(x = mean_temp, y = Tcorr, color = year),
+    size = 1.7
+  ) +
+  scale_color_viridis_c(name = "Year") +
+  scale_x_continuous(breaks = seq(0, 30, by = 2)) +
+  facet_wrap(~ Species, ncol = 4, labeller = labeller(Species = ~gsub(" - ", "\n", .x)))+
+  labs(x = "Temperature (°C)", y = expression(T[corr])) +
+  theme_bw()
+p_tcorr
+
+ggsave(paste0(plotdir, "/tcorr.png"), p_tcorr,
+       width = 8.5, height = 8, units = "in", dpi = 600)
+

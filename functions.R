@@ -3189,3 +3189,46 @@ plot_diet_heatmap <- function(diet_df,
   return(p)
   invisible(diet_ratios)
 }
+
+calc_mean_temperature <- function(this_run, boundary_boxes = NULL, layer = 6) {
+  
+  print(paste(this_run, "mean temperature"))
+  
+  # File paths
+  wd     <- "../v2"
+  ncfile <- paste0(wd, "/outputGOA_", this_run, ".nc")
+  
+  this_nc <- nc_open(ncfile)
+  on.exit(nc_close(this_nc))  # ensures file closes even if function errors
+  
+  # Get time
+  ts   <- ncvar_get(this_nc, "t") %>% as.numeric()
+  tyrs <- ts / (60 * 60 * 24 * 365)
+  
+  # Extract temperature [layer, box, time]
+  mat     <- ncvar_get(this_nc, "Temp")
+  surface <- mat[layer, , ]   # [box, time] — swap layer index here when ready for bottom temp
+  
+  # Mask boundary boxes
+  if (!is.null(boundary_boxes)) {
+    surface[(boundary_boxes + 1L), ] <- NA
+  }
+  
+  # Area-weighted mean across boxes at each time step
+  # box_areas expected in environment: data frame with columns box_id and area
+  areas <- box_areas$area  # assumes box_areas rows align with box dimension
+  
+  temp_ts <- apply(surface, 2, function(col) {
+    valid    <- !is.na(col)
+    sum(col[valid] * areas[valid]) / sum(areas[valid])
+  })
+  
+  tibble(
+    t        = tyrs,
+    mean_temp = temp_ts
+  ) %>%
+    filter(t > 0) %>%
+    mutate(run = this_run) %>%
+    left_join(key_config, by = "run")
+}
+
