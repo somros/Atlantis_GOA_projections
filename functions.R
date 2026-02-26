@@ -1138,12 +1138,13 @@ calc_ecosystem_indicators <- function(this_run){
   print(this_run)
   
   # Define functional groups
-  gadids <- c("POL", "COD")
-  flatfish <- c("ATF", "REX", "FFS", "FFD", "FHS")
-  roundfish <- c("POL", "COD", "SBF")
-  rockfish <- c("POP", "RFS", "RFD", "RFP", "THO")
-  shrimp <- c("PAN", "PWN")
-  forage <- c("HER", "SAN", "CAP", "FOS", "EUL")
+  gadids     <- c("POL", "COD")
+  flatfish   <- c("ATF", "REX", "FFS", "FFD", "FHS")
+  roundfish  <- c("POL", "COD", "SBF")
+  rockfish   <- c("POP", "RFS", "RFD", "RFP", "THO")
+  shrimp     <- c("PAN", "PWN")
+  forage     <- c("HER", "SAN", "CAP", "FOS", "EUL")
+  # piscivores, predators, and fish_grps assumed defined in the calling environment
   
   # File paths
   wd <- "../v2"
@@ -1171,7 +1172,7 @@ calc_ecosystem_indicators <- function(this_run){
   # Split Code and Age
   code_age_split <- strsplit(biom_long$Code.Age, "\\.", fixed = FALSE)
   biom_long$Code <- sapply(code_age_split, `[`, 1)
-  biom_long$Age <- as.numeric(sapply(code_age_split, `[`, 2))
+  biom_long$Age  <- as.numeric(sapply(code_age_split, `[`, 2))
   
   # Calculate total biomass by species and time
   biom_by_species <- biom_long %>%
@@ -1181,33 +1182,41 @@ calc_ecosystem_indicators <- function(this_run){
   # Calculate functional group biomasses
   biom_functional <- biom_by_species %>%
     mutate(
-      gadids = ifelse(Code %in% gadids, biom_mt, 0),
-      flatfish = ifelse(Code %in% flatfish, biom_mt, 0),
-      roundfish = ifelse(Code %in% roundfish, biom_mt, 0),
-      shrimp = ifelse(Code %in% shrimp, biom_mt, 0),
-      forage = ifelse(Code %in% forage, biom_mt, 0),
-      oy = ifelse(Code %in% oy_species, biom_mt, 0)
+      gadids     = ifelse(Code %in% gadids,      biom_mt, 0),
+      flatfish   = ifelse(Code %in% flatfish,    biom_mt, 0),
+      roundfish  = ifelse(Code %in% roundfish,   biom_mt, 0),
+      shrimp     = ifelse(Code %in% shrimp,      biom_mt, 0),
+      forage     = ifelse(Code %in% forage,      biom_mt, 0),
+      oy         = ifelse(Code %in% oy_species,  biom_mt, 0),
+      piscivores = ifelse(Code %in% piscivores,  biom_mt, 0),
+      predators  = ifelse(Code %in% predators,   biom_mt, 0),
+      fish       = ifelse(Code %in% fish_grps,   biom_mt, 0)
     ) %>%
     group_by(Time) %>%
     summarise(
-      gadids_biom = sum(gadids),
-      flatfish_biom = sum(flatfish),
-      roundfish_biom = sum(roundfish),
-      shrimp_biom = sum(shrimp),
-      forage_biom = sum(forage),
-      oy_biom = sum(oy),
+      gadids_biom     = sum(gadids),
+      flatfish_biom   = sum(flatfish),
+      roundfish_biom  = sum(roundfish),
+      shrimp_biom     = sum(shrimp),
+      forage_biom     = sum(forage),
+      oy_biom         = sum(oy),
+      piscivores_biom = sum(piscivores),
+      predators_biom  = sum(predators),
+      fish_biom       = sum(fish),
       .groups = 'drop'
     )
   
   # Calculate indicators
   indicators <- biom_functional %>%
     mutate(
-      gadids_to_flatfish = gadids_biom / flatfish_biom,
-      roundfish_to_flatfish = roundfish_biom / flatfish_biom,
-      shrimp_to_oy_spp = shrimp_biom / oy_biom,
-      forage_to_oy_spp = forage_biom / oy_biom
+      gadids_to_flatfish    = gadids_biom     / flatfish_biom,
+      roundfish_to_flatfish = roundfish_biom  / flatfish_biom,
+      shrimp_to_oy_spp      = shrimp_biom     / oy_biom,
+      forage_to_oy_spp      = forage_biom     / oy_biom,
+      pisc_to_fish          = piscivores_biom / fish_biom,
+      predators_to_fish     = predators_biom  / fish_biom
     ) %>%
-    select(Time, gadids_to_flatfish:forage_to_oy_spp)
+    select(Time, gadids_to_flatfish:predators_to_fish)
   
   # Add decade, summarize
   indicators_decadal <- indicators %>%
@@ -1217,7 +1226,7 @@ calc_ecosystem_indicators <- function(this_run){
     group_by(decade, indicator) %>%
     summarise(
       value_mean = mean(value, na.rm = TRUE),
-      value_sd = sd(value, na.rm = TRUE),
+      value_sd   = sd(value,   na.rm = TRUE),
       .groups = 'drop'
     ) %>%
     mutate(run = this_run)
@@ -1263,7 +1272,7 @@ plot_ecosystem_indicators <- function(indicators_df){
   indicators_df$cap[is.na(indicators_df$cap)] <- "No cap"
   indicators_df$cap <- factor(indicators_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05"))
   
-  # order weigths
+  # order weights
   indicators_df$wgts <- factor(indicators_df$wgts, levels = c("equal","binary","attainment-based"))
   
   # Make palette
@@ -1276,6 +1285,9 @@ plot_ecosystem_indicators <- function(indicators_df){
   # add decade label
   indicators_df <- indicators_df %>%
     mutate(decade_lab = ifelse(decade == 6, "2050-2059", "2090-2099"))
+  
+  # do not plot piscivores - that's really just ATF biomass-wise and not much goes on
+  indicators_df <- indicators_df %>% filter(indicator != "pisc_to_fish")
   
   # Time series plot with points and error bars
   p <- indicators_df %>%
@@ -1291,12 +1303,7 @@ plot_ecosystem_indicators <- function(indicators_df){
     scale_color_manual(values = cap_col) +
     scale_shape_manual(values = c(1:length(unique(indicators_df$wgts)))) +
     scale_y_continuous(limits = c(0, NA)) +
-    # scale_x_continuous(breaks = unique(indicators_df$decade)) +
     theme_bw() +
-    # theme(
-    #   strip.text = element_text(size = 10),
-    #   legend.position = "bottom"
-    # ) +
     labs(
       x = "",
       y = "Indicator value (mean ± SD)",
@@ -1305,13 +1312,15 @@ plot_ecosystem_indicators <- function(indicators_df){
     ) +
     facet_grid(env ~ indicator, 
                labeller = labeller(indicator = as_labeller(
-                 c("forage_to_oy_spp" = "Forage fish / groundfish", 
-                   "gadids_to_flatfish" = "Gadids / flatfish",
-                   "shrimp_to_oy_spp" = "Shrimp / groundfish")
+                 c("forage_to_oy_spp"    = "Forage fish / groundfish", 
+                   "gadids_to_flatfish"  = "Gadids / flatfish",
+                   "shrimp_to_oy_spp"    = "Shrimp / groundfish",
+                   "pisc_to_fish"        = "Piscivores / all fish",
+                   "predators_to_fish"   = "Predators / all fish")
                )))
   
   ggsave(paste0(plotdir, "/ecosystem_indicators.png"), p,
-         width = 9, height = 4,
+         width = 15, height = 4,
          units = "in", dpi = 300)
   
 }

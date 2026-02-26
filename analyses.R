@@ -349,7 +349,6 @@ for(i in 1:length(unique(POL_predators$Predator))){
   
 }
 
-# NB: at the moment there is a pervasive time series effect that is masking most of these plots
 # This is tied to the climate scenario to an extent, but it's also just POL declining over time in the base model
 # Differences overall are very small
 
@@ -363,6 +362,85 @@ indicators_all <- map_df(run, ~{
 
 # Create plots
 plot_ecosystem_indicators(indicators_all)
+
+# biomass of predatory and piscivorous fish
+# first of all we need to identify which species are predatory / piscivorous
+# piscivorous means it eats >x% fish in the realized diets
+# predatory means it eats >x% non-plankton 
+# we then use these lists to compute biomass of piscivores and predators 
+fish_grps <- grps %>% filter(GroupType %in% c("FISH","SHARK")) %>% pull(Code)
+non_plkt_grps <- grps %>% filter(!GroupType %in% 
+                                   c("LG_INF",
+                                     "SM_INF",
+                                     "PHYTOBEN",
+                                     "MED_ZOO",
+                                     "SM_ZOO",
+                                     "LG_PHY",
+                                     "SM_PHY",
+                                     "SED_BACT",
+                                     "PL_BACT",
+                                     "CARRION",
+                                     "LAB_DET",
+                                     "REF_DET")) %>% pull(Code)
+  
+get_diet_base <- function(this_run){
+  
+  print(this_run)
+  
+  # File paths
+  #wd <- paste0("C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/output_files/data/out_", this_run)
+  wd <- "../v2"
+  dietfile <-  paste0(wd, "/outputGOA_", this_run, "DietCheck.txt")
+  diet <- fread((dietfile)) %>% select(-Stock, -Updated) %>% filter(Predator %in% fish_grps) 
+  
+  # filter to year 30, end of the burn-in
+  diet_base <- diet %>%
+    pivot_longer(-c(Time:Cohort), names_to = "prey", values_to = "prop") %>%
+    mutate(year = ceiling(Time/365)) %>%
+    filter(year == burnin) %>%
+    group_by(Predator, Cohort, prey) %>%
+    summarise(mean_prop = mean(prop))
+  
+  return(diet_base)
+} 
+
+diet_30 <- get_diet_base("000") # avg diet comps in year 30 (end of burn-in)
+
+piscivores <- diet_30 %>%
+  group_by(Predator, Cohort) %>%
+  # keep only the oldest (max) cohort per predator, with the idea that their diets reflect the adult diets
+  group_by(Predator) %>%
+  filter(Cohort == max(Cohort)) %>%
+  # sum proportions for fish_grps prey items
+  summarise(
+    fish_prop = sum(mean_prop[prey %in% fish_grps]),
+    .groups = "drop"
+  ) %>%
+  mutate(is_piscivore = ifelse(fish_prop > 0.5, 1, 0)) %>% # arbitrary cutoff of 50% as majority of diet
+  filter(is_piscivore > 0) %>%
+  pull(Predator) #  [1] "ATF" "BDF" "BSF" "DOG" "DOL" "KWR" "PIN" "SHD" "SHP" "SSL" "WHT"
+
+predators <- diet_30 %>%
+  group_by(Predator, Cohort) %>%
+  # keep only the oldest (max) cohort per predator
+  group_by(Predator) %>%
+  filter(Cohort == max(Cohort)) %>%
+  # sum proportions for non_plkt_grps prey items
+  summarise(
+    pred_prop = sum(mean_prop[prey %in% non_plkt_grps]),
+    .groups = "drop"
+  ) %>%
+  mutate(is_predator = ifelse(pred_prop > 0.5, 1, 0))  %>%
+  filter(is_predator > 0) %>%
+  pull(Predator)
+
+# [1] "ATF" "BDF" "BDI" "BSF" "BSI" "COD" "CRO" "DFD" "DFS" "DOG" "DOL" "EUL" "FFS" "FHS" "FOS" "HAL" "HER" "KIN" "KWR" "KWT" "OCT" "PIN" "POL" "POP" "RFD" "RFP"
+# [27] "RFS" "SBF" "SCO" "SCU" "SHD" "SHP" "SKB" "SKL" "SKO" "SSL" "THO" "WHB" "WHH" "WHT"
+
+# the definition of piscivore is simpler than "predator", in some way everything is a predator except for true plant grazers / detritivores
+# the proportion is also arbitrary
+# check with Isaac / Kerim
+
 
 # Revenue -----------------------------------------------------------------
 
@@ -418,6 +496,10 @@ these_names <- c("Pollock", "Cod", "Arrowtooth_flounder", "Sablefish", "Pacific_
 waa_core <- map_df(run, ~calc_weight_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
 naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundary_boxes = boundary_boxes))
 
+# drop year 110, because there is only one time step there and it messes up computations
+waa_core <- waa_core %>% filter(year < max(year))
+naa_core <- naa_core %>% filter(year < max(year))
+
 # plot
 # Comparisons plotted against these defaults:
 # Env: NoClimate
@@ -425,24 +507,25 @@ naa_core <- map_df(run, ~calc_numbers_at_age(.x, sp_names = these_names, boundar
 # Wgts: equal and 400K cap (no wgts at 800K) 
 
 plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_env = T, tag = "core", which_decade = 10)
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core")
-plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core")
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_cap = T, tag = "core", which_decade = 10)
+plot_age_heatmap(waa_core, naa_core, plot_type = "both", by_wgts = T, tag = "core", which_decade = 10)
 
-plot_age_heatmap(waa_core, plot_type = "WAA", by_env = T, tag = "core")
-plot_age_heatmap(waa_core, plot_type = "WAA", by_cap = T, tag = "core")
-plot_age_heatmap(waa_core, plot_type = "WAA", by_wgts = T, tag = "core")
-
-plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_env = T, tag = "core")
-plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_cap = T, tag = "core")
-plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core")
+# plot_age_heatmap(waa_core, plot_type = "WAA", by_env = T, tag = "core")
+# plot_age_heatmap(waa_core, plot_type = "WAA", by_cap = T, tag = "core")
+# plot_age_heatmap(waa_core, plot_type = "WAA", by_wgts = T, tag = "core")
+# 
+# plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_env = T, tag = "core")
+# plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_cap = T, tag = "core")
+# plot_age_heatmap(naa_df = naa_core, plot_type = "NAA", by_wgts = T, tag = "core")
 
 # all grps for appendix
 waa_all <- map_df(run, ~calc_weight_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
 naa_all <- map_df(run, ~calc_numbers_at_age(.x, sp_names = oy_names, boundary_boxes = boundary_boxes))
 
-plot_age_heatmap(waa_all, naa_all %>% filter(Name != "Cod"), plot_type = "both", by_env = T, tag = "all_nocod", which_decade = 10)
+plot_age_heatmap(waa_all, naa_all, plot_type = "both", by_env = T, tag = "all", which_decade = 10)
 plot_age_heatmap(waa_all, naa_all, plot_type = "both", by_cap = T, tag = "all", which_decade = 5)
 plot_age_heatmap(waa_all, naa_all, plot_type = "both", by_wgts = T, tag = "all", which_decade = 10)
+plot_age_heatmap(waa_all, naa_all %>% filter(Name != "Cod"), plot_type = "both", by_env = T, tag = "all_nocod", which_decade = 10)
 
 # do it for top predators
 # For all runs with specific species
@@ -450,9 +533,9 @@ preds <- c("Steller_sea_lion", "Pinnipeds", "Seabird_dive_fish", "Seabird_surfac
 waa_pred <- map_df(run, ~calc_weight_at_age(.x, sp_names = preds, boundary_boxes = boundary_boxes))
 
 # plot
-plot_age_heatmap(waa_pred, plot_type = "WAA", by_env = T, tag = "pred")
-pw <- plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred", which_decade = 5)
-plot_age_heatmap(waa_pred, plot_type = "WAA", by_wgts = T, tag = "pred")
+plot_age_heatmap(waa_pred, plot_type = "WAA", by_env = T, tag = "pred", which_decade = 10)
+pw <- plot_age_heatmap(waa_pred, plot_type = "WAA", by_cap = T, tag = "pred", which_decade = 5) # for figure
+plot_age_heatmap(waa_pred, plot_type = "WAA", by_wgts = T, tag = "pred", which_decade = 5)
 
 # Top pred diets -----------------------------------------------------------------
 
@@ -471,20 +554,9 @@ ggsave(paste0(plotdir, "/heatmaps/stacked_preds.png"), p_pred,
 
 
 # Cap computations --------------------------------------------------------
-# what are equilibrium catches at b40? POL, SBF, COD, POP have converged by then
+# look at aggregate catch at the end of the run (year 109)
 catch_df %>%
-  filter(Time == 0, run == "000") %>%
-  select(Code, biom_mt_selex) %>%
-  arrange(-biom_mt_selex) %>%
-  mutate(cumsum = cumsum(biom_mt_selex),
-         prop = cumsum / sum(biom_mt_selex))
-
-# those stocks are less than half total biomass so I don't think this is helpful
-# we'd need HCRs on all, and to apply them we'd need to get FMSY etc.
-# should we even use FMSY for low attainment species, or historical F?
-# in that sense, we could just look at aggregate catch at the end of the run
-catch_df %>%
-  filter(Time == max(Time), run == "000") %>%
+  filter(Time == 109*365, run == "000") %>%
   pull(catch_mt) %>%
   sum()
 
