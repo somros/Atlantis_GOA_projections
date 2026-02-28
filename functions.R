@@ -272,6 +272,12 @@ pull_fishery_info <- function(this_run, ecocap = T, ssb = T){
     
   }
   
+  # when the HCR closes a fishery, tings get funky in the ecocap output file
+  # basically, if catch is 0 then the OY rescaling should be NaN (there is no catch to rescale), so let's put a guard for that here
+  res_df <- res_df %>%
+    rowwise() %>%
+    mutate(oy_rescale = ifelse(oy_rescale == 0, NaN, oy_rescale))
+  
   # TODO: remove this chunk when we add estBo to the harvest.prm file for all stocks
   res_df <- res_df %>%
     left_join(estbo_key, by = "Code") %>%
@@ -327,41 +333,35 @@ plot_fishery <- function(catch_df){
               biom_tot = sum(biom_mt_selex)) %>%
     ungroup() %>%
     pivot_longer(-c(Time:env)) %>%
-    # filter(env %in% c("NoClimate", "ssp585"), wgts == "equal") %>% # added for AMSS
-    filter(env %in% c("NoClimate"), wgts != "binary", name == "catch_tot") %>% # added for AMSS
-    ggplot(aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts)))+
+    filter(wgts != "binary") %>%
+    ggplot(aes(x = (Time/365)+1990, y = value, color = factor(cap, labels = c("800 Kt", "600 Kt", "400 Kt", "200 Kt")), linetype = factor(wgts)))+
     # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
     #          fill = "grey", alpha = 0.3) +
-    geom_line(linewidth = 1, alpha = 0.8)+ # tweaked for AMSS
+    geom_line(linewidth = 0.9, alpha = 0.8)+
     scale_color_manual(values = cap_col)+
-    #scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
     scale_linetype_manual(values = c("solid","dashed","dotted"))+
     geom_hline(data = ~ filter(., name == "catch_tot"),
                aes(yintercept = as.numeric(as.character(cap))), 
                linetype = "dashed", 
                linewidth = 0.25)+    #geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
     theme_bw()+
-    # scale_x_continuous(breaks = c(seq(1990,2100,10)))+
-    # scale_x_continuous(breaks = c(seq(2020,2100,10)))+
-    scale_x_continuous(limit = c(2020,2050), breaks = c(seq(2020,2100,10)))+ # AMSS
+    scale_x_continuous(breaks = c(seq(2020,2100,10)))+
     scale_y_continuous(limits = c(0,NA))+
-    # theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "bottom")+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")+
     labs(x = "", 
          y = "Metric tons",
          color = "Cap (mt)",
          linetype = "Weight scheme")+
-    guides(linetype = "none")+ # AMSS
     facet_grid(name~env, scales = "free_y",
-               labeller = labeller(name = as_labeller(
-                 c("biom_tot" = "SSB", 
-                   "catch_tot" = "Catch")
-               )))
+               labeller = labeller(
+                 name = as_labeller(c("biom_tot" = "SSB",
+                                      "catch_tot" = "Catch")
+                 ),
+                 env = as_labeller(c("NoClimate" = "Constant climate"))))
   
   ggsave(paste0(plotdir, "/", "oy_tot.png"), p1, 
-         width = 5.5, height = 4.5,  
-         units = "in", dpi = 300)
+         width = 9, height = 4.5,  
+         units = "in", dpi = 600)
   
   # by species, biom fraction (need B0), f fraction, catch, biomass (selected), exploitation rate, ...?
   # maybe it would be best to produce this plot one species at a time
@@ -381,44 +381,46 @@ plot_fishery <- function(catch_df){
       pivot_longer(-c(Time, Code, Name, run, cap, wgts, env))
     
     # drop the f_frac panel, redundant with the OY rescale panel mostly and we have the HCR information in the dedicated plots
-    p_df <- p_df %>% filter(name != "f_frac")# %>%
-      # filter(env %in% c("NoClimate"), wgts != "binary", name != "oy_rescale") # added for AMSS
-      # filter(env %in% c("NoClimate", "ssp585"), wgts != "binary", name != "oy_rescale") # added for AMSS
+    p_df <- p_df %>% filter(name != "f_frac") %>%
+      filter(wgts != "binary")
     
     p_tmp <- ggplot(data = p_df %>% filter(Time > burnin*365+1), 
-                    aes(x = (Time/365)+1990, y = value, color = factor(cap), linetype = factor(wgts))) +
+                    aes(x = (Time/365)+1990, y = value, color = factor(cap, labels = c("800 Kt", "600 Kt", "400 Kt", "200 Kt")), linetype = factor(wgts))) +
       # annotate("rect", xmin = 0+1990, xmax = burnin+1990, ymin = -Inf, ymax = Inf, 
       #          fill = "grey", alpha = 0.3) +
-      geom_line(linewidth = 1, alpha = 0.8) +
+      geom_line(linewidth = 0.8, alpha = 0.8) +
       scale_color_manual(values = cap_col)+
-      scale_linetype_manual(values = c("solid","dashed","dotted"))+
-      # scale_x_continuous(breaks = c(seq(1990,2100,10))) +
       scale_x_continuous(breaks = c(seq(2020,2100,10))) +
       scale_y_continuous(limits = c(0,NA)) +
       geom_hline(data = data.frame(name = "biom_frac", 
-                                   env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
+                                   env = unique(catch_df$env)),
                  aes(yintercept = 1), linetype = "dotted") +
       {if(oy_species[i] %in% hcr_spp) 
         geom_hline(data = data.frame(name = "biom_frac", 
-                                     env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
+                                     env = unique(catch_df$env)),
                    aes(yintercept = 0.4), linetype = "dotted", color = "blue")} + 
       {if(oy_species[i] %in% hcr_spp) 
         geom_hline(data = data.frame(name = "biom_frac", 
-                                     env = unique(catch_df$env)) %>% filter(env %in% c("NoClimate")),
+                                     env = unique(catch_df$env)),
                    aes(yintercept = 0.2), linetype = "dotted", color = "red")} + 
-      # geom_vline(xintercept = burnin, linetype = "dashed", color = "red")+
-      facet_grid2(env ~ name, scales = "free_y", independent = "y") +
+      facet_grid2(env ~ name, scales = "free_y", independent = "y",
+                  labeller = labeller(
+                    name = as_labeller(c("biom_frac" = "SSB/SSB0",
+                                         "catch_mt" = "Catch",
+                                         "oy_rescale" = "Cap-based rescaling")
+                    ),
+                    env = as_labeller(c("NoClimate" = "Constant\nclimate")))) +
       labs(title = current_name,
            x = "", 
            y = "",
            color = "Cap (mt)",
            linetype = "Weight scheme") +
       theme_bw() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    
-    ggsave(paste0(plotdir, "/by_spp/", current_code, "1.png"), p_tmp, 
-           width = 7.5, height = 3,  
-           units = "in", dpi = 300)
+      theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+      
+    ggsave(paste0(plotdir, "/by_spp/", current_code, ".png"), p_tmp, 
+           width = 9, height = 5,  
+           units = "in", dpi = 600)
     
   }
   
@@ -593,11 +595,11 @@ plot_fishery <- function(catch_df){
          color = "F(atf)",
          title = "Pollock-arrowtooth tradeoffs")+
     facet_grid(cap ~ env)#, 
-               # labeller = labeller(decade = as_labeller(
-               #   c("3" = "2020-2029", 
-               #     "10" = "2090-2099")
-               # )))
-
+  # labeller = labeller(decade = as_labeller(
+  #   c("3" = "2020-2029", 
+  #     "10" = "2090-2099")
+  # )))
+  
   
   ggsave(paste0(plotdir, "/pol_vs_atf1.png"), p4, 
          width = 10, height = 4, 
@@ -1825,7 +1827,7 @@ plot_delta <- function(catch_df, revenue_df){
     ) %>%
     mutate(variable = recode(variable,
                              "catch_delta" = "Catch",
-                             "biom_delta" = "Biomass"))
+                             "biom_delta" = "SSB"))
   
   # Aggregate to decadal averages for catch and biomass
   catch_biom_decadal <- delta_catch_biom_long %>%
@@ -1858,8 +1860,8 @@ plot_delta <- function(catch_df, revenue_df){
   
   # Create combined catch/biomass plot
   p_catch_biom <- catch_biom_decadal %>%
-    mutate(variable = factor(variable, levels = c("Catch", "Biomass"))) %>%
-    ggplot(aes(x = decade, y = delta_mean, fill = factor(cap))) +
+    mutate(variable = factor(variable, levels = c("Catch", "SSB"))) %>%
+    ggplot(aes(x = decade, y = delta_mean, fill = factor(cap, labels = c("600 Kt", "400 Kt", "200 Kt")))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
     geom_bar(stat = "identity", position = position_dodge(),
              color = "darkgrey", linewidth = 0.3) +
@@ -1877,13 +1879,12 @@ plot_delta <- function(catch_df, revenue_df){
     labs(
       y = "Difference from no cap (mt)",
       fill = "Cap (mt)"#,
-      #title = "Impact of ecosystem caps on OY catch, biomass, and revenue (NoClimate scenario)"
     ) +
     facet_grid(variable ~ wgts)
   
   # Create revenue plot
   p_revenue <- revenue_decadal %>%
-    ggplot(aes(x = decade, y = revenue_delta_mean, fill = factor(cap))) +
+    ggplot(aes(x = decade, y = revenue_delta_mean, fill = factor(cap, labels = c("600 Kt", "400 Kt", "200 Kt")))) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
     geom_bar(stat = "identity", position = position_dodge(),
              color = "darkgrey", linewidth = 0.3) +
@@ -1912,7 +1913,7 @@ plot_delta <- function(catch_df, revenue_df){
     theme(legend.position = "bottom")
   
   ggsave(paste0(plotdir, "/catch_biom_revenue_delta.png"), p_combined,
-         width = 10, height = 7, units = "in", dpi = 300)
+         width = 10, height = 6, units = "in", dpi = 300)
   
   # Create summary table
   summary_table <- delta_filtered %>%

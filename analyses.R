@@ -82,8 +82,8 @@ pref <- data.frame("Code" = oy_species) %>%
 
 ref_points_ss <- read.csv("output/ref_points_from_SS_runs_nov2025.csv")
 estbo_key <- ref_points_ss %>% select(Code, b0) %>% rename(estbo = b0)
-estbo_key <- estbo_key %>% mutate(b40 = 0.4*estbo,
-                                  b25 = 0.25*estbo)
+# estbo_key <- estbo_key %>% mutate(b40 = 0.4*estbo,
+#                                   b25 = 0.25*estbo)
 
 # need to get fref
 # the value in the prm is an input that may or may not be close
