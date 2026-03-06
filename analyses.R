@@ -20,7 +20,7 @@ oy_dir <- "AtlantisGOA_MS/"
 output_dir <- "../v2"
 
 # source functions script
-source("functions.R")
+source("functions_YEAR.R")
 
 # handle time
 burnin <- 30
@@ -65,6 +65,7 @@ for(sp in codes){
 }
 
 # get "preferred" species
+# ALBI: check that we still need this
 # TODO: base this on harvest specification data and keep it constant across scenarios
 pref <- data.frame("Code" = oy_species) %>%
   rowwise()%>%
@@ -108,6 +109,7 @@ fref_frame <- ref_points_ss %>%
 #   left_join(mult_df, by = "Code") %>%
 #   mutate(fref = fref * mult) %>%
 #   select(-mult)
+# ALBI 3/6 we no longer need the bit above, leaving for reference but delete when cleaning up
 
 # NB: this is a hack purely for plotting purpose to see if the HCR works - catch is all off
 
@@ -208,8 +210,7 @@ catch_df$cap <- factor(catch_df$cap, levels = c("8e+05","6e+05","4e+05","2e+05")
 # order weigths
 catch_df$wgts <- factor(catch_df$wgts, levels = c("equal","binary","attainment-based"))
 
-# discard the very first time step, because catch=0 then and it makes the plots misleading
-
+# ALBI: delete the below
 # get preferred species given a certain weighting scheme
 # using > mean(w) here in an attempt to automate the choice
 # pref <- catch_df %>%
