@@ -364,7 +364,7 @@ plot_fishery <- function(catch_df){
     
   }
   
-  # ALBI 3/6 as of now this is a pretty uninteresting plot
+  # ALBI 3/6 as of now p3 is a pretty uninteresting plot
   # catch and biomass trade-off negatively, as one would expect
   # no big insights on differences between caps, etc.
   
@@ -429,7 +429,6 @@ plot_fishery <- function(catch_df){
   #        units = "in", dpi = 300)
   
   # Tradeoff plot between ATF biomass and POL biomass and their respective F
-  # TODO: turn this to mean per decade
   pol <- catch_df %>%
     filter(Code == "POL") %>%
     select(Year, biom_frac, f, run, cap:env) %>%
@@ -446,35 +445,10 @@ plot_fishery <- function(catch_df){
     left_join(atf) %>%
     mutate(f_ratio = f_atf / f_pol)
   
-  # p4 <- pol_vs_atf %>%
-  #   filter(Time >= burnin*365) %>%
-  #   filter(!is.na(f_ratio)) %>%
-  #   filter(Time %in% (seq(0,yr_end,10)*365)) %>% # thin out
-  #   ggplot(aes(x = biom_atf, y = biom_pol, color = f_ratio, shape = factor(wgts)))+
-  #   geom_line(aes(group = interaction(Time, cap)), size = 0.5) +
-  #   geom_point(aes(shape = factor(wgts)), size = 1.5)+
-  #   geom_text(data = . %>% filter(wgts == "equal"), 
-  #             aes(label = Time / 365), 
-  #             nudge_x = -0.025, nudge_y = 0.025, 
-  #             size = 2.5, color = "black", 
-  #             check_overlap = F) +
-  #   scale_shape_manual(values = c(1:length(unique(catch_df$wgts))))+
-  #   viridis::scale_color_viridis(option = "cividis", begin = 0.05, end = 0.95)+
-  #   theme_bw()+
-  #   # scale_x_continuous(limits = c(0,NA))+
-  #   # scale_y_continuous(limits = c(0,NA))+
-  #   labs(x = "Arrowtooth B/B0",
-  #        y = "Pollock B/B0",
-  #        shape = "Weight scheme",
-  #        color = "F(atf) / F(pol)",
-  #        title = "Pollock-arrowtooth tradeoffs")+
-  #   facet_grid(env~factor(cap))
-  
-  # alternative version
+  # plot summarizes by decade because otherwise the time dimension confuses relationship
   p4 <- pol_vs_atf %>%
     filter(Year >= burnin, !is.na(f_ratio)) %>%
     mutate(decade = ceiling(Year/10)) %>%
-    # filter(decade %in% c(3, 10)) %>%
     filter(decade == 6, wgts != "binary") %>% # years 51 to 60
     group_by(decade, run, cap, wgts, env) %>%
     summarise(across(c(biom_pol, f_pol, biom_atf, f_atf, f_ratio),
@@ -511,253 +485,9 @@ plot_fishery <- function(catch_df){
          width = 10, height = 4, 
          units = "in", dpi = 300)
   
-  # plot quantities relative to reference points and ecosystem indicators
-  # some of these are repeated from the time series graphs so probably can do away with this plot, but it makes you compare species
-  # summarize for early and late period to simplify the time dimension
-  # ecoind_df_tmp <- catch_df %>%
-  #   filter(!is.na(catch_mt)) %>%
-  #   rowwise() %>%
-  #   mutate(period = ifelse(between(Time/365,burnin,burnin+10), "early",
-  #                          ifelse(Time/365>(yr_end-10), "late", NA))) %>%
-  #   ungroup() %>%
-  #   filter(!is.na(period)) %>%
-  #   group_by(run,cap,wgts,env,other,period,Code,Name,w_id,fref) %>%
-  #   summarize(biom_mt_tot = mean(biom_mt_tot),
-  #             catch_mt = mean(catch_mt),
-  #             f = mean(f),
-  #             oy_rescale = mean(oy_rescale)) %>%
-  #   ungroup()
-  # 
-  # # need data sets of total biomass and total catch
-  # ecoind_df_tot <- ecoind_df_tmp %>%
-  #   group_by(run,cap,wgts,env,other,period) %>%
-  #   summarise(tot_biom = sum(biom_mt_tot),
-  #             tot_catch = sum(catch_mt)) %>%
-  #   ungroup()
-  # 
-  # ecoind_df <- ecoind_df_tmp %>%
-  #   left_join(estbo_key) %>%
-  #   left_join(ecoind_df_tot) %>%
-  #   mutate(b_over_b0 = biom_mt_tot / estbo,
-  #          f_over_ftarg = f/fref,
-  #          biom_over_btot = biom_mt_tot / tot_biom,
-  #          catch_over_ctot = catch_mt / tot_catch) %>%
-  #   select(run:Name, oy_rescale, b_over_b0:catch_over_ctot)
-  # 
-  # # pivot longer
-  # ecoind_df_long <- ecoind_df %>%
-  #   pivot_longer(-c(run:Name)) %>%
-  #   ungroup()
-  # 
-  # # dot plot
-  # p5 <- ecoind_df_long %>%
-  #   filter(env == "ssp585", Code %in% c("POL","COD","ATF","SBF","POP")) %>%
-  #   ggplot(aes(x = name, y = value, color = factor(cap), shape = wgts))+
-  #   geom_point(position = position_dodge(width = .75), size = 2)+
-  #   scale_color_manual(values = cap_col)+
-  #   theme_bw()+
-  #   geom_hline(yintercept = 1, linetype = "dashed")+
-  #   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  #   labs(x = "", y = "", color = "Cap (mt)", shape = "Weight scheme", title = "ssp585")+
-  #   facet_grid(Code~period)
-  # 
-  # ggsave(paste0(plotdir, "/ecoind.png"), p5, 
-  #        width = 12, height = 6.5, 
-  #        units = "in", dpi = 300)
-  
 }
 
-#' Plot Impact of Ecosystem Caps on Total Catch
-#'
-#' @description
-#' Creates bar plots showing the difference in total catch between capped
-#' scenarios and the no-cap baseline (800,000 mt cap), using equal weight scheme.
-#'
-#' @param catch_df Data frame. Output from pull_fishery_info() containing
-#'   fishery data across multiple runs and scenarios
-#'
-#' @return NULL (function creates and saves plot to plotdir)
-#'
-#' @details
-#' Calculates total catch across all OY species for each time step, then
-#' computes the difference between each capped scenario and the no-cap
-#' baseline. Only shows results for equal weight scheme to avoid overcrowding.
-#' Positive values indicate higher catch than baseline, negative values
-#' indicate reduced catch due to cap constraints.
-#' 
-#' Plot shows:
-#' \itemize{
-#'   \item X-axis: Year
-#'   \item Y-axis: Difference in catch (mt) from no-cap baseline
-#'   \item Fill color: Cap level
-#'   \item Facet by climate scenario
-#'   \item Only post-burn-in period shown
-#'   \item Reference line at y=0
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' plot_cap_impact(catch_df)
-#' }
-plot_catch_delta <- function(catch_df){
-  
-  # Calculate total catch and biomass by time and scenario
-  totals <- catch_df %>%
-    filter(Time > 0) %>%
-    filter(!is.na(catch_mt)) %>%
-    group_by(Time, run, cap, wgts, env) %>%
-    summarise(
-      catch_tot = sum(catch_mt),
-      biom_tot = sum(biom_mt_tot),
-      .groups = 'drop'
-    )
-  
-  # Get no-cap baseline (800,000 mt cap)
-  baseline <- totals %>%
-    filter(cap == 8e+05) %>%
-    rename(
-      catch_baseline = catch_tot,
-      biom_baseline = biom_tot
-    ) %>%
-    select(Time, env, catch_baseline, biom_baseline)
-  
-  # expand to other wgts
-  all_wgts <- unique(totals$wgts)
-  baseline <- baseline %>%
-    crossing(wgts = all_wgts)
-  
-  # Calculate difference from baseline
-  delta <- totals %>%
-    filter(cap != 8e+05, wgts != "binary") %>%
-    left_join(baseline, by = c("Time", "wgts", "env")) %>%
-    mutate(
-      catch_delta = catch_tot - catch_baseline,
-      biom_delta = biom_tot - biom_baseline
-    ) %>%
-    select(Time, run, cap, wgts, env, catch_delta, biom_delta) %>%
-    pivot_longer(
-      cols = c(catch_delta, biom_delta),
-      names_to = "variable",
-      values_to = "delta"
-    ) %>%
-    mutate(variable = recode(variable,
-                             "catch_delta" = "Catch",
-                             "biom_delta" = "Biomass"))
-  
-  # Make palette for capped scenarios only (excluding 8e+05)
-  cap_col <- pnw_palette(name="Sunset2", 
-                         n=length(unique(delta$cap)), 
-                         type="discrete")
-  
-  # Create plot
-  p <- delta %>%
-    filter(wgts != "binary") %>%
-    filter(env == "NoClimate") %>%
-    filter(cap == "6e+05") %>%
-    filter(Time > burnin * 365) %>%
-    ggplot(aes(x = (Time/365) + 1990, y = delta, fill = factor(wgts))) +
-    geom_bar(stat = "identity", position = position_dodge(0.9)) +
-    #scale_fill_manual(values = cap_col) +
-    scale_x_continuous(breaks = seq(1990, 2100, 10)) +
-    geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.5) +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(
-      x = "Year",
-      y = "Difference from no cap (mt)",
-      fill = "Cap (mt)",
-      title = "Impact of ecosystem caps on total OY catch and biomass (relative to no cap)"
-    ) +
-    facet_grid(variable ~ env)
-  
-  ggsave(paste0(plotdir, "/catch_biom_cap_impact.png"), p, 
-         width = 12, height = 6,  
-         units = "in", dpi = 300)
-  
-}
-
-plot_revenue_delta <- function(revenue_df){
-  
-  # Process revenue data by time and scenario
-  revenue_totals <- revenue_df %>%
-    filter(Time > 0) %>%
-    select(Time, run, cap, wgts, env, revenue)
-  
-  # Get no-cap baseline (800,000 mt cap)
-  baseline <- revenue_totals %>%
-    filter(cap == 8e+05) %>%
-    rename(revenue_baseline = revenue) %>%
-    select(Time, env, revenue_baseline)
-  
-  # Expand to other wgts
-  all_wgts <- unique(revenue_totals$wgts)
-  baseline <- baseline %>%
-    crossing(wgts = all_wgts)
-  
-  # Calculate difference from baseline
-  delta <- revenue_totals %>%
-    filter(cap != 8e+05, wgts != "binary") %>%
-    left_join(baseline, by = c("Time", "wgts", "env")) %>%
-    mutate(revenue_delta = revenue - revenue_baseline) %>%
-    select(Time, run, cap, wgts, env, revenue_delta)
-  
-  # Make palette for capped scenarios only (excluding 8e+05)
-  cap_col <- pnw_palette(name="Sunset2", 
-                         n=length(unique(delta$cap)), 
-                         type="discrete")
-  
-  delta$wgts <- factor(delta$wgts, levels = c("equal","attainment-based","binary"))
-  
-  # Create plot
-  p <- delta %>%
-    filter(wgts != "binary") %>%
-    filter(env == "NoClimate") %>%
-    filter(cap == "6e+05") %>%
-    filter(Time > burnin * 365) %>%
-    ggplot(aes(x = (Time/365) + 1990, y = revenue_delta, fill = factor(wgts))) +
-    geom_bar(stat = "identity", position = position_dodge(0.9)) +
-    scale_x_continuous(limits = c(2020, 2050), breaks = seq(1990, 2100, 10)) +
-    scale_y_continuous(labels = scales::dollar_format()) +
-    geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.5) +
-    theme_bw() +
-    # theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(
-      x = "",
-      y = "Difference from 800K mt cap ($)",
-      fill = "Weight scheme",
-      title = "Impact of 600K mt cap on revenue (relative to 800K mt cap)"
-    ) +
-    facet_wrap(~ env)
-  
-  ggsave(paste0(plotdir, "/revenue_cap_impact.png"), p, 
-         width = 8, height = 3.5,  
-         units = "in", dpi = 300)
-  
-  # summary of foregone revenues
-  
-}
-
-#' Set Boundary Box Values to NA
-#'
-#' @description
-#' Helper function to set values in boundary boxes to NA for Atlantis spatial
-#' analysis. Handles both 2D and 3D arrays/matrices.
-#'
-#' @param mat Numeric matrix or array. Spatial data from Atlantis model with
-#'   boundary boxes that need to be excluded from analysis
-#'
-#' @return Matrix or array of same dimensions with boundary box values set to NA
-#'
-#' @details
-#' Uses the global variable boundary_boxes to identify which spatial boxes
-#' represent model boundaries. For 3D arrays, sets entire columns to NA.
-#' For 2D matrices, sets entire rows to NA. Boundary boxes are typically
-#' excluded from ecological analysis as they represent model edges.
-#'
-#' @examples
-#' \dontrun{
-#' clean_matrix <- setNA(spatial_data_matrix)
-#' }
+############################################################################
 setNA <- function(mat) {
   mat2 <- mat
   if(length(dim(mat2))==3) mat2[,(boundary_boxes+1),]<-NA
@@ -765,36 +495,7 @@ setNA <- function(mat) {
   mat2
 }
 
-#' Calculate Shannon-Wiener Diversity Index
-#'
-#' @description
-#' Computes the Shannon-Wiener diversity index for age structure of OY species
-#' from Atlantis NetCDF output files. Can optionally weight by maturity.
-#'
-#' @param this_run Integer. The run number/ID for the Atlantis model simulation
-#' @param do_mature Logical. If TRUE, weights abundance by maturity-at-age
-#'   before calculating diversity index
-#'
-#' @return Data frame containing:
-#'   \item{year}{Year of simulation}
-#'   \item{Name}{Species name}
-#'   \item{H}{Shannon-Wiener diversity index}
-#'   \item{run}{Run number}
-#'
-#' @details
-#' Reads numbers-at-age from NetCDF output files, sums across spatial boxes
-#' (excluding boundaries), and calculates Shannon diversity index:
-#' H = -sum(p_i * log(p_i)) where p_i is proportion in age class i.
-#' 
-#' When do_mature=TRUE, numbers are weighted by spawning potential (fspb)
-#' before calculating proportions, giving a diversity index for spawning
-#' population age structure.
-#'
-#' @examples
-#' \dontrun{
-#' diversity_data <- get_H(2097, do_mature = FALSE)
-#' mature_diversity <- get_H(2097, do_mature = TRUE)
-#' }
+############################################################################
 get_H <- function(this_run, do_mature){
   
   #TODO: turn this to decadal avg
